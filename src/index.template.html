@@ -3,57 +3,100 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Budget Ledger</title>
+<meta name="theme-color" content="#090d15">
+<title>Expat Financial Planner</title>
 <style>
-:root{--bg:#0d0f12;--card:#1a1e24;--line:#3a414c;--text:#ffffff;--muted:#c9d1d9;--accent:#ffd34d;--good:#4ade80;--warn:#facc15;--bad:#f87171;--btn:#2b3340;--fs:20px}
-body.light{--bg:#ffffff;--card:#f2f4f7;--line:#9aa3ad;--text:#000000;--muted:#2b2f36;--accent:#0040c0;--good:#0a7a2f;--warn:#8a5a00;--bad:#b00020;--btn:#e1e6ec}
+:root{--bg:#090d15;--bg2:#0e1420;--card:#121a28;--card2:#172133;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.15);--text:#f3f5f9;--muted:#9aa5b8;--accent:#d6b05a;--accent2:#f1d690;--ink:#1a1405;--good:#3ddc97;--warn:#f5c04e;--bad:#ff6b6b;--btn:#1a2335;--fs:20px;--r:18px;--shadow:0 1px 0 rgba(255,255,255,.04) inset,0 14px 34px -18px rgba(0,0,0,.75)}
+body.light{--bg:#f3f5f9;--bg2:#eceff5;--card:#ffffff;--card2:#fbfcfe;--line:rgba(15,23,42,.08);--line2:rgba(15,23,42,.16);--text:#0f172a;--muted:#566074;--accent:#a07a1c;--accent2:#d0a845;--good:#0d8a55;--warn:#9a6200;--bad:#c62828;--btn:#eef1f6;--shadow:0 1px 2px rgba(15,23,42,.06),0 10px 26px -16px rgba(15,23,42,.25)}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:var(--fs);line-height:1.45}
-main{max-width:640px;margin:0 auto;padding:16px 14px 120px}
-h1{font-size:1.5em;margin:.2em 0 .4em}
-h2{font-size:1.2em;margin:1.2em 0 .5em}
-.card{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0}
-.big{font-size:1.8em;font-weight:700}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:var(--fs);line-height:1.45;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+body{background:radial-gradient(900px 500px at 85% -10%,rgba(214,176,90,.10),transparent 60%),radial-gradient(700px 500px at -10% 10%,rgba(80,120,200,.08),transparent 60%),var(--bg);background-attachment:fixed;min-height:100vh}
+body.light{background:var(--bg)}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:rgba(9,13,21,.78);backdrop-filter:saturate(1.4) blur(16px);-webkit-backdrop-filter:saturate(1.4) blur(16px);border-bottom:1px solid var(--line)}
+body.light .topbar{background:rgba(243,245,249,.85)}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--text)}
+.brand b{display:block;font-size:.92em;font-weight:750;letter-spacing:-.015em;line-height:1.1}
+.brand small{display:block;font-size:.58em;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+#topdate{color:var(--muted);font-size:.72em;font-weight:600;padding:6px 12px;border:1px solid var(--line);border-radius:99px}
+main{max-width:660px;margin:0 auto;padding:10px 16px 130px}
+h1{font-size:1.6em;letter-spacing:-.025em;margin:.45em 0 .2em;font-weight:780;line-height:1.15}
+h2{font-size:.68em;margin:1.8em 0 .7em;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.card h2{margin-top:0;font-size:.72em}
+.card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin:14px 0;box-shadow:var(--shadow)}
+.card>.muted:first-child,.label{font-size:.7em;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.big{font-size:2em;font-weight:780;letter-spacing:-.03em;line-height:1.1;margin:6px 0 8px}
 .muted{color:var(--muted)}
-.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
-button,.btn{font:inherit;color:var(--text);background:var(--btn);border:2px solid var(--line);border-radius:12px;padding:14px 16px;min-height:56px;cursor:pointer}
-button.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
-button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:4px solid var(--accent);outline-offset:2px}
-input,select,textarea{font:inherit;color:var(--text);background:var(--bg);border:2px solid var(--line);border-radius:10px;padding:12px;width:100%;min-height:56px}
-label{display:block;font-weight:700;margin:14px 0 6px}
+.card .muted{font-size:.85em}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.row+.row{margin-top:6px}
+strong{font-weight:650}
+button,.btn{font:inherit;font-size:.92em;font-weight:650;color:var(--text);background:var(--btn);border:1px solid var(--line2);border-radius:14px;padding:12px 18px;min-height:54px;cursor:pointer;transition:transform .08s ease,border-color .2s,background .2s,box-shadow .2s}
+button:hover{border-color:rgba(214,176,90,.6)}
+button:active{transform:scale(.98)}
+button.primary{background:linear-gradient(180deg,var(--accent2),var(--accent));color:var(--ink);border-color:transparent;box-shadow:0 10px 24px -12px rgba(214,176,90,.75)}
+button:disabled{opacity:.55;cursor:default;transform:none}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+input,select,textarea{font:inherit;color:var(--text);background:var(--bg2);border:1px solid var(--line2);border-radius:12px;padding:12px 14px;width:100%;min-height:54px;transition:border-color .2s}
+input:focus,select:focus{border-color:var(--accent)}
+label{display:block;font-weight:650;font-size:.8em;letter-spacing:.01em;color:var(--muted);margin:16px 0 6px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.bar{height:22px;border-radius:11px;background:var(--btn);overflow:hidden;border:2px solid var(--line);margin:6px 0 2px}
-.bar>span{display:block;height:100%}
+.bar{height:10px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;margin:10px 0 4px}
+body.light .bar{background:rgba(15,23,42,.08)}
+.bar>span{display:block;height:100%;border-radius:99px}
 .ok{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
-.fill-ok{background:var(--good)}.fill-warn{background:var(--warn)}.fill-bad{background:var(--bad)}
-.alert{border-left:8px solid var(--bad);border-radius:0;background:var(--card);padding:12px 14px;margin:10px 0;font-weight:700}
-.alert.w{border-left-color:var(--warn)}
-nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:2px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom)}
-nav a{color:var(--text);text-decoration:none;text-align:center;padding:12px 2px;font-size:.8em;font-weight:700;min-height:64px;display:flex;flex-direction:column;justify-content:center}
-nav a[aria-current="page"]{background:var(--accent);color:#000}
-.tx{display:flex;justify-content:space-between;gap:8px;padding:12px 0;border-bottom:1px solid var(--line)}
+.fill-ok{background:linear-gradient(90deg,#1fb985,var(--good))}.fill-warn{background:linear-gradient(90deg,#dc9c22,var(--warn))}.fill-bad{background:linear-gradient(90deg,#e03f4f,var(--bad))}
+.alert{position:relative;border:1px solid rgba(255,107,107,.26);background:rgba(255,107,107,.07);border-radius:14px;padding:13px 16px 13px 42px;margin:10px 0;font-weight:600;font-size:.88em;line-height:1.4}
+.alert::before{content:"";position:absolute;left:17px;top:19px;width:10px;height:10px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 4px rgba(255,107,107,.16)}
+.alert.w{border-color:rgba(245,192,78,.28);background:rgba(245,192,78,.07)}
+.alert.w::before{background:var(--warn);box-shadow:0 0 0 4px rgba(245,192,78,.16)}
+.alert.i{border-color:rgba(122,162,255,.3);background:rgba(122,162,255,.07)}.alert.i::before{background:#7aa2ff;box-shadow:0 0 0 4px rgba(122,162,255,.16)}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(14,20,32,.88);backdrop-filter:saturate(1.4) blur(16px);-webkit-backdrop-filter:saturate(1.4) blur(16px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+body.light nav{background:rgba(255,255,255,.92)}
+nav a{color:var(--muted);text-decoration:none;text-align:center;padding:6px 1px;font-size:.6em;font-weight:650;min-height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:14px;transition:color .2s,background .2s}
+nav a svg{width:24px;height:24px}
+nav a:hover{color:var(--text)}
+nav a[aria-current="page"]{color:var(--accent);background:rgba(214,176,90,.12)}
+.tx{display:flex;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
 .tx:last-child{border-bottom:0}
-.seg{display:flex;gap:8px;flex-wrap:wrap}
-.seg button{flex:1;min-width:30%}
-.seg button[aria-pressed="true"]{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+.seg{display:flex;gap:4px;flex-wrap:wrap;background:var(--bg2);padding:5px;border-radius:16px;border:1px solid var(--line);margin:12px 0}
+.seg button{flex:1;min-width:28%;border:0;background:transparent;min-height:48px;box-shadow:none}
+.seg button[aria-pressed="true"]{background:linear-gradient(180deg,var(--accent2),var(--accent));color:var(--ink)}
 .sr{position:absolute;left:-9999px}
-#toast{position:fixed;left:12px;right:12px;bottom:90px;max-width:616px;margin:0 auto;background:var(--accent);color:#000;font-weight:700;padding:14px;border-radius:12px;display:none;z-index:9}
-.chk{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
-.chk input[type=checkbox]{width:32px;height:32px;min-height:0;flex:none;margin-top:4px}
-.chk select{margin-top:6px;min-height:48px;padding:8px}
-.tag{display:inline-block;font-size:.75em;padding:2px 8px;border-radius:8px;border:2px solid var(--line);margin-left:6px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:100px;max-width:min(600px,calc(100% - 24px));width:max-content;background:var(--text);color:var(--bg);font-weight:650;font-size:.88em;padding:12px 20px;border-radius:16px;display:none;z-index:9;box-shadow:0 16px 36px -12px rgba(0,0,0,.6)}
+.chk{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
+.chk input[type="checkbox"]{width:28px;height:28px;min-height:0;flex:none;margin-top:4px;accent-color:var(--accent)}
+.chk select{margin-top:6px;min-height:46px;padding:8px}
+.tag{display:inline-block;font-size:.68em;font-weight:650;padding:2px 9px;border-radius:99px;border:1px solid var(--line2);color:var(--muted);margin-left:6px}
+#eye{min-height:44px;padding:6px 16px;font-size:.78em;border-radius:99px}
+.cols>div{min-width:0}
+details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-weight:650}
+a{color:var(--accent)}
+::selection{background:rgba(214,176,90,.35)}
+@media (min-width:1000px){
+body{padding-left:250px}
+.topbar{padding:14px 36px}
+nav{top:0;bottom:0;right:auto;width:250px;grid-template-columns:1fr;grid-auto-rows:min-content;align-content:start;gap:4px;padding:22px 14px;border-top:0;border-right:1px solid var(--line);background:rgba(11,16,26,.92)}
+nav::before{content:"Menu";display:block;font-size:.62em;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:6px 16px 10px}
+nav a{flex-direction:row;justify-content:flex-start;gap:14px;font-size:.82em;min-height:50px;padding:0 16px;text-align:left}
+nav a svg{width:22px;height:22px}
+main{max-width:900px;padding:22px 36px 60px}
+main.wide{max-width:1340px}
+.cols{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:26px;align-items:start}
+#toast{bottom:28px}
+}
 </style>
 </head>
 <body>
-<main id="app" aria-live="polite"><p class="big">Loading your ledger…</p></main>
+<header class="topbar"><a class="brand" href="#home" aria-label="Expat Financial Planner home"><svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="fpg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3dc9a"/><stop offset="1" stop-color="#b8892c"/></linearGradient></defs><rect width="36" height="36" rx="11" fill="url(#fpg)"/><circle cx="18" cy="18" r="9" stroke="#1a1405" stroke-width="2.2" fill="none"/><path d="M9 18h18M18 9c-3.2 3.4-3.2 14.6 0 18M18 9c3.2 3.4 3.2 14.6 0 18" stroke="#1a1405" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg><span><b>Expat Financial Planner</b><small>Two currencies, one budget</small></span></a><span id="topdate"></span></header>
+<main id="app" aria-live="polite"><p class="muted" style="margin-top:40px">Loading your planner…</p></main>
 <div id="toast" role="status"></div>
 <script>window.addEventListener("error",function(e){var d=document.getElementById("app");if(d)d.insertAdjacentHTML("afterbegin","<p style=\"color:#f87171\">Error: "+String(e.message).replace(/</g,"&lt;")+" (line "+e.lineno+")</p>")});</script>
 <nav aria-label="Main">
-  <a href="#home" data-v="home">Home</a>
-  <a href="#add" data-v="add">Add</a>
-  <a href="#history" data-v="history">History</a>
-  <a href="#import" data-v="import">Import</a>
-  <a href="#settings" data-v="settings">Settings</a>
+<a href="#home" data-v="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.5L12 4l8.5 6.5V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/></svg><span>Home</span></a>
+<a href="#add" data-v="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span>Add</span></a>
+<a href="#history" data-v="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>History</span></a>
+<a href="#import" data-v="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M4 19h16"/></svg><span>Import</span></a>
+<a href="#settings" data-v="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg><span>Settings</span></a>
 </nav>
 <script>(0,eval)(decodeURIComponent(escape(atob("__B64__"))))</script>
 </body>
