@@ -50,7 +50,7 @@ body.light .bar{background:rgba(15,23,42,.08)}
 .alert.w{border-color:rgba(245,192,78,.28);background:rgba(245,192,78,.07)}
 .alert.w::before{background:var(--warn);box-shadow:0 0 0 4px rgba(245,192,78,.16)}
 .alert.i{border-color:rgba(122,162,255,.3);background:rgba(122,162,255,.07)}.alert.i::before{background:#7aa2ff;box-shadow:0 0 0 4px rgba(122,162,255,.16)}
-nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(14,20,32,.88);backdrop-filter:saturate(1.4) blur(16px);-webkit-backdrop-filter:saturate(1.4) blur(16px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(14,20,32,.88);backdrop-filter:saturate(1.4) blur(16px);-webkit-backdrop-filter:saturate(1.4) blur(16px);border-top:1px solid var(--line);display:grid;grid-auto-flow:column;grid-auto-columns:minmax(64px,1fr);overflow-x:auto;gap:2px;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
 body.light nav{background:rgba(255,255,255,.92)}
 nav a{color:var(--muted);text-decoration:none;text-align:center;padding:6px 1px;font-size:.6em;font-weight:650;min-height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:14px;transition:color .2s,background .2s}
 nav a svg{width:24px;height:24px}
@@ -75,7 +75,7 @@ a{color:var(--accent)}
 @media (min-width:1000px){
 body{padding-left:250px}
 .topbar{padding:14px 36px}
-nav{top:0;bottom:0;right:auto;width:250px;grid-template-columns:1fr;grid-auto-rows:min-content;align-content:start;gap:4px;padding:22px 14px;border-top:0;border-right:1px solid var(--line);background:rgba(11,16,26,.92)}
+nav{top:0;bottom:0;right:auto;width:250px;grid-auto-flow:row;grid-auto-columns:auto;overflow-x:hidden;overflow-y:auto;grid-template-columns:1fr;grid-auto-rows:min-content;align-content:start;gap:4px;padding:22px 14px;border-top:0;border-right:1px solid var(--line);background:rgba(11,16,26,.92)}
 nav::before{content:"Menu";display:block;font-size:.62em;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:6px 16px 10px}
 nav a{flex-direction:row;justify-content:flex-start;gap:14px;font-size:.82em;min-height:50px;padding:0 16px;text-align:left}
 nav a svg{width:22px;height:22px}
@@ -95,6 +95,12 @@ main.wide{max-width:1340px}
 <a href="#home" data-v="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.5L12 4l8.5 6.5V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/></svg><span>Home</span></a>
 <a href="#add" data-v="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span>Add</span></a>
 <a href="#history" data-v="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>History</span></a>
+<a href="#today" data-v="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><circle cx="12" cy="14.5" r="2.2" fill="currentColor"/></svg><span>Today</span></a>
+<a href="#month" data-v="month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg><span>Month</span></a>
+<a href="#bills" data-v="bills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg><span>Bills</span></a>
+<a href="#goals" data-v="goals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span>Goals</span></a>
+<a href="#report" data-v="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 15.5h5M10 19h3"/></svg><span>Report</span></a>
+<a href="#ask" data-v="ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z"/><path d="M10 9a2 2 0 1 1 2.6 1.9c-.4.2-.6.5-.6.9v.4M12 13.6v.1"/></svg><span>Ask Accountant</span></a>
 <a href="#import" data-v="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M4 19h16"/></svg><span>Import</span></a>
 <a href="#settings" data-v="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg><span>Settings</span></a>
 </nav>
