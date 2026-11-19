@@ -33,7 +33,9 @@ function usd(n){return twoCur()?usd0(n)+" ("+fmt0((+n||0)*rateNow(),S.localCur)+
 function usdP(n,local){if(local==null||!twoCur())return usd(n);return usd0(n)+" ("+fmt0(local,S.localCur)+")"}
 function php(n){return fmt(n,S.localCur)}
 function toUsd(amount,cur){return cur===S.homeCur?amount:amount/rateNow()}
-function inCur(t,cur){if(t.currency===cur)return +t.amount||0;const h=+t.usd||0;return cur===S.homeCur?h:h*rateNow()}
+function inCur(t,cur){if(t.currency===cur)return +t.amount||0;const h=+t.usd||0;if(cur===S.homeCur)return h;return h*((t.currency===S.homeCur&&+t.rate>0)?+t.rate:rateNow())}
+function rateText(t){if(!twoCur()||!(+t.rate>0))return "";const r=+t.rate;return t.currency===S.homeCur||t.currency===S.localCur?`1 ${S.homeCur} = ${r.toFixed(r<10?4:2)} ${t.currency===S.homeCur?S.localCur:t.currency}`:`1 ${S.homeCur} = ${r} ${t.currency}`}
+async function addLocked(list){const r=await gs("addTxLocked",list);list.forEach((t,i)=>{const x=r[i]||{};t.id=x.id;if(+x.rate>0)t.rate=+x.rate;if(x.usd!=null)t.usd=+x.usd});return list}
 function hid(v){return EYE?usd(v):"••••••"}
 function curs(){return [...new Set([S.localCur,S.homeCur].filter(Boolean))]}
 function curOptions(sel){return curs().map(c=>`<option${c===sel?" selected":""}>${esc(c)}</option>`).join("")}
@@ -61,14 +63,14 @@ function balanceNow(){const b=S.balances||{};const ts=+b.ts||(b.date?ymd(b.date)
  return{items,date:b.date||"",now:items.reduce((a,x)=>a+x.home,0),changes:n}}
 function stats(){
  const now=new Date(),cy=cycle(now),wk=weekStart(now);
- const r={spent:0,income:0,byCat:{},byCatLocal:{},weekGroceries:0,cashIn:0,cashOut:0,debtPaid:0,count:0};
+ const r={spent:0,spentLocal:0,income:0,byCat:{},byCatLocal:{},weekGroceries:0,cashIn:0,cashOut:0,debtPaid:0,count:0};
  for(const t of TX){
   const v=+t.usd||0;
   if(t.kind==="expense"&&t.category==="debt"&&(t.date||"").slice(0,7)>=S.debtStartMonth)r.debtPaid+=v;
   if(t.kind==="expense"&&t.category==="groceries"&&t.date>=wk)r.weekGroceries+=v;
   if((t.date||"")<cy.start||(t.date||"")>=cy.next)continue;
   r.count++;
-  if(t.kind==="expense"){r.spent+=v;r.byCat[t.category]=(r.byCat[t.category]||0)+v;r.byCatLocal[t.category]=(r.byCatLocal[t.category]||0)+inCur(t,S.localCur);if(t.account==="Cash")r.cashOut+=v}
+  if(t.kind==="expense"){r.spent+=v;r.spentLocal+=inCur(t,S.localCur);r.byCat[t.category]=(r.byCat[t.category]||0)+v;r.byCatLocal[t.category]=(r.byCatLocal[t.category]||0)+inCur(t,S.localCur);if(t.account==="Cash")r.cashOut+=v}
   else if(t.kind==="income")r.income+=v;
   else if(t.kind==="transfer"&&t.toAccount==="Cash")r.cashIn+=v;
  }
@@ -114,6 +116,22 @@ function alertsList(st){
  const unacc=st.cashIn-st.cashOut;if(unacc>20)out.push(["w",`${usd(unacc)} in cash withdrawn this pay cycle isn't accounted for yet.`]);
  return out;
 }
+// How the exchange rate moved what you paid: repeat payments in local money
+// compared with the last time, and this pay cycle compared with today's rate.
+function niceDay(d){return ymd(d).toLocaleDateString("en-US",{month:"short",day:"numeric"})}
+function swings(){
+ if(!twoCur())return [];const cy=cycle();const out=[];
+ const loc=TX.filter(t=>t.kind==="expense"&&t.currency===S.localCur&&+t.amount>0&&+t.usd>0).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.createdAt||0)-(b.createdAt||0));
+ const byCat={};loc.forEach(t=>(byCat[t.category]=byCat[t.category]||[]).push(t));
+ for(const k in byCat){const l=byCat[k];const last=l[l.length-1];if((last.date||"")<cy.start)continue;
+  const prev=[...l.slice(0,-1)].reverse().find(p=>Math.abs(p.amount-last.amount)<=last.amount*0.01&&(p.date||"")<(last.date||""));
+  if(!prev||last.amount<1000)continue;const before=prev.usd*(last.amount/prev.amount);const d=before-last.usd;if(Math.abs(d)<0.01)continue;
+  out.push(`${CATNAME[k]||k}: ${fmt0(last.amount,S.localCur)} cost ${usd0(last.usd)} on ${niceDay(last.date)}. That is ${usd0(Math.abs(d))} ${d>0?"less":"more"} than the same amount on ${niceDay(prev.date)}, because the rate moved.`)}
+ const cyc=loc.filter(t=>(t.date||"")>=cy.start&&(t.date||"")<cy.next);
+ if(cyc.length){const paid=cyc.reduce((a,t)=>a+(+t.usd),0),local=cyc.reduce((a,t)=>a+(+t.amount),0),now=local/rateNow(),d=now-paid;
+  out.push(`This pay cycle you spent ${fmt0(local,S.localCur)}. At the rates on the days you paid, that cost ${usd0(paid)}. At today's rate it would cost ${usd0(now)}${Math.abs(d)>=0.01?`, ${usd0(Math.abs(d))} ${d>0?"more":"less"}`:""}.`)}
+ return out;
+}
 function viewHome(){
  const st=stats();const plan=monthlyPlan();const inc=incomeTotal();const left=inc-st.spent;const cy=cycle();
  const debtLeft=Math.max(0,(+S.debtStart||0)-st.debtPaid);const months=S.budgets.debt>0?Math.ceil(debtLeft/S.budgets.debt):0;
@@ -127,12 +145,13 @@ function viewHome(){
   ${bn.items.map(x=>`<div class="row"><span>${esc(x.name)}</span><span>${EYE?(x.currency===S.homeCur?usd(x.amount):fmt(x.amount,x.currency)+(x.currency===S.localCur&&twoCur()?" ("+fmt(x.home,S.homeCur)+")":"")):"••••••"}</span></div>`).join("")}
   <div class="muted" style="margin-top:6px">Counted from ${esc(bn.date)}${bn.changes?", with "+bn.changes+" entr"+(bn.changes>1?"ies":"y")+" since then":""}. About ${hid(bn.now/daysLeft)} a day until your next pay day, ${esc(ymd(cy.next).toLocaleDateString("en-US",{month:"short",day:"numeric"}))}.</div></div>`;
  }else h+=`<div class="alert w">Add what's in each account today under Settings, "Money you have now", and this page will keep the total up to date as you spend.</div>`;
- h+=`<div class="card"><div class="muted">Spent this pay cycle</div><div class="big">${hid(st.spent)}</div>
+ h+=`<div class="card"><div class="muted">Spent this pay cycle</div><div class="big">${EYE?usdP(st.spent,st.spentLocal):"••••••"}</div>
  ${barHtml(st.spent,plan)}<div class="row"><span>Plan ${hid(plan)}</span><span class="${level(st.spent,plan)}">${EYE?(plan-st.spent>=0?usd(plan-st.spent)+" left":usd(st.spent-plan)+" over"):"••••••"}</span></div>
  <div class="row" style="margin-top:8px"><span>Income each cycle</span><span>${hid(inc)}</span></div>
  <div class="row"><span>Income minus spending</span><span class="${left>=0?"ok":"bad"}">${hid(left)}</span></div></div>
  <div class="grid2"><button class="primary" id="speak">Read summary out loud</button><button id="refresh">Refresh</button></div>
  <div class="grid2" style="margin-top:10px"><button id="review">Check categories with Claude</button><button id="brief">AI money check-in</button></div><p id="rstat" role="status" style="font-weight:700;white-space:pre-wrap"></p>`;
+ const sw=swings();if(sw.length&&EYE)h+=`<h2>Currency swing</h2><div class="card">${sw.map(x=>`<p style="margin:.4em 0">${esc(x)}</p>`).join("")}<div class="muted">Every entry keeps Wise's rate for the day you paid it.</div></div>`;
  if(al.length)h+=`<h2>Watch out</h2>`+al.map(a=>`<div class="alert ${a[0]==="w"?"w":a[0]==="i"?"i":""}">${esc(a[1])}</div>`).join("");
  if(!S.configured)h+=`<div class="alert w">Welcome! Open Settings to enter your currencies, pay day, income, budgets and accounts.</div>`;
  h+=`</div><div>`;
@@ -255,7 +274,7 @@ async function saveForm(e){
 }
 function gs(fn,...args){return new Promise((res,rej)=>{google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args)})}
 async function saveTx(t){
- try{const id=await gs("addTx",t);t.id=id;TX.unshift(t);return true}catch(e){toast("Couldn't save to your sheet. Try again.");return false}
+ try{await addLocked([t]);TX.unshift(t);return true}catch(e){toast("Couldn't save to your sheet. Try again.");return false}
 }
 
 function viewHistory(){
@@ -267,7 +286,7 @@ function viewHistory(){
  for(const t of list){
   const label=t.kind==="expense"?CATNAME[t.category]||t.category:t.kind==="income"?"Received":`Moved to ${t.toAccount||""}`;
   h+=`<div class="tx"><div><strong>${esc(label)}</strong><br><span class="muted">${esc(t.note||"")}${t.note?" · ":""}${esc(t.account||"")} · ${esc(t.date)}${t.who?" · by "+esc(String(t.who).split("@")[0]):""}</span>${t.source&&t.source!=="manual"?`<span class="tag">${esc(t.source.replace("import:",""))}</span>`:""}</div>
-  <div style="text-align:right"><strong class="${t.kind==="income"?"ok":""}">${t.kind==="income"?"+":""}${usd(t.usd)}</strong>${t.currency!==S.homeCur?`<br><span class="muted">${fmt(t.amount,t.currency)}</span>`:""}<br><button data-del="${esc(t.id)}" style="min-height:44px;padding:6px 10px;margin-top:4px" aria-label="Delete ${esc(label)} ${usd(t.usd)}">Delete</button></div></div>`}
+  <div style="text-align:right"><strong class="${t.kind==="income"?"ok":""}">${t.kind==="income"?"+":""}${usdP(t.usd,inCur(t,S.localCur))}</strong>${t.currency!==S.homeCur?`<br><span class="muted">${fmt(t.amount,t.currency)}</span>`:""}${rateText(t)?`<br><span class="muted">${esc(rateText(t))}</span>`:""}<br><button data-del="${esc(t.id)}" style="min-height:44px;padding:6px 10px;margin-top:4px" aria-label="Delete ${esc(label)} ${usd(t.usd)}">Delete</button></div></div>`}
  h+=`</div>`;app.innerHTML=h;
  $("#m").onchange=e=>{lsSet("histMonth",e.target.value);viewHistory()};
  app.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
@@ -398,7 +417,7 @@ async function saveImport(){
   if(r.toAccount)t.toAccount=r.toAccount;
   batch.push(t);
   if(r.fee)batch.push({kind:"expense",amount:r.fee,currency:r.currency,usd:Math.round(toUsd(r.fee,r.currency)*100)/100,category:"fees",account:r.account,note:"Fee: "+r.note,date:r.date,source:"import:"+r.account,createdAt:Date.now()});}
- try{const ids=await gs("addTxBatch",batch);batch.forEach((t,i)=>{t.id=ids[i];TX.unshift(t)});ok=rows.length}catch(e){toast("Couldn't save to your sheet. Try again.");btn.disabled=false;btn.textContent="Try saving again";return}
+ try{await addLocked(batch);batch.forEach(t=>TX.unshift(t));ok=rows.length}catch(e){toast("Couldn't save to your sheet. Try again.");btn.disabled=false;btn.textContent="Try saving again";return}
  toast(`Saved ${ok} transactions.`);importRows=[];location.hash="#home";
 }
 
@@ -495,7 +514,7 @@ async function autoImport(file,pw,stat){
  if(!fresh.length){stat.textContent="All "+rows.length+" transactions from "+acct+" are already in your ledger. Nothing new to add.";return}
  stat.textContent="Saving "+fresh.length+" new transactions from "+acct+"…";
  const batch=fresh.map(r=>{const t={kind:r.kind,amount:r.amount,currency:r.currency,usd:Math.round(toUsd(r.amount,r.currency)*100)/100,category:r.category,account:r.account,note:r.note,date:r.date,source:"import:"+r.account,createdAt:Date.now()};if(r.toAccount)t.toAccount=r.toAccount;return t});
- try{const ids=await gs("addTxBatch",batch);batch.forEach((t,i)=>{t.id=ids[i];TX.unshift(t)})}catch(e){stat.className="bad";stat.textContent="Couldn't save to your sheet. Try again.";return}
+ try{await addLocked(batch);batch.forEach(t=>TX.unshift(t))}catch(e){stat.className="bad";stat.textContent="Couldn't save to your sheet. Try again.";return}
  const sp=batch.filter(t=>t.kind==="expense").reduce((s,t)=>s+t.usd,0);
  stat.textContent="Added "+batch.length+" transactions from "+acct+(skipped?", skipped "+skipped+" already in your ledger":"")+". New spending: "+usd(sp)+".";
  if(S.hasKey){stat.textContent+=" Claude is now checking the categories…";await runReview(stat,true)}
