@@ -1,8 +1,8 @@
-# Expat Financial Planner
+# Financial Planner
 
 **A free, private budget planner for people who earn in one currency and live in another.**
 
-You get paid in dollars, pounds or euros, and you pay rent and buy groceries in pesos, baht, euros or something else. Most budget apps only handle one currency, so you end up doing the sums in your head. Expat Financial Planner shows every amount in both currencies at the live exchange rate. It runs on your own Google Sheet, so your money data stays in your own Google account.
+You get paid in dollars, pounds or euros, and you pay rent and buy groceries in pesos, baht, euros or something else. Most budget apps only handle one currency, so you end up doing the sums in your head. Financial Planner shows every amount in both currencies at the live exchange rate. It runs on your own Google Sheet, so your money data stays in your own Google account.
 
 It also uses **AI**: Claude can read your bank statements, sort each transaction into the right category, and write you a short plain-English check-in on how your pay cycle is going.
 
@@ -27,11 +27,11 @@ It also uses **AI**: Claude can read your bank statements, sort each transaction
 
 ## Set it up (about 10 minutes)
 
-**Shortcut: let Claude set it up for you.** If you'd rather skip the setup, open Claude with a browser tool connected (for example Claude in Chrome), give it the link to this page, and say: *"Deploy this Expat Financial Planner for me with my details."* Then tell it what it needs: your home and local currencies, your pay day, your income, your accounts and your budgets. Claude can do the steps below for you. You'll still sign in to Google yourself, and you'll paste your own Claude API key yourself.
+**Shortcut: let Claude set it up for you.** If you'd rather skip the setup, open Claude with a browser tool connected (for example Claude in Chrome), give it the link to this page, and say: *"Deploy this Financial Planner for me with my details."* Then tell it what it needs: your home and local currencies, your pay day, your income, your accounts and your budgets. Claude can do the steps below for you. You'll still sign in to Google yourself, and you'll paste your own Claude API key yourself.
 
 You need a Google account. A Claude API key is optional, and you only need one for the AI features.
 
-1. **Make a new Google Sheet.** Go to [sheets.new](https://sheets.new) and give it a name, for example "My Expat Budget".
+1. **Make a new Google Sheet.** Go to [sheets.new](https://sheets.new) and give it a name, for example "My Budget".
 2. **Open the script editor.** In the sheet's menu, choose **Extensions → Apps Script**.
 3. **Add the server code.** Delete everything in `Code.gs`, then paste in the contents of [`Code.gs`](Code.gs) from this repository.
 4. **Add the page.** Click the **+** next to "Files", choose **HTML**, and name it `Index` (exactly that). Delete what's inside, then paste in the contents of [`Index.html`](Index.html).
