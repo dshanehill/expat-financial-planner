@@ -160,7 +160,7 @@ function viewHome(){
  <div class="muted">${hid(st.debtPaid)} paid of ${hid(S.debtStart)}. ${debtLeft>0&&months?`About ${months} more month${months>1?"s":""} at ${hid(S.budgets.debt)} a month.`:debtLeft<=0?"Paid off!":""}</div></div>`;
  h+=`<h2>Categories this pay cycle</h2>`;
  for(const [k,n] of CATS){const sp=catSpent(st,k);const b=catBudget(k);if(!sp&&!b)continue;
-  h+=`<div class="card"><div class="row"><strong>${esc(n)}</strong><span class="${level(sp,b)}">${EYE?usdP(sp,st.byCatLocal[k])+(b?" of "+usd(b):""):"••••••"}</span></div>${b||sp?barHtml(sp,b):""}</div>`}
+  h+=`<div class="card"><div class="row"><strong>${esc(n)}</strong><span class="${level(sp,b)}">${EYE?usdP(st.byCat[k]||0,st.byCatLocal[k])+(b?" of "+usd(b):""):"••••••"}</span></div>${b||sp?barHtml(sp,b):""}</div>`}
  h+=`</div></div>`;
  app.innerHTML=h;
  $("#eye").onclick=()=>{EYE=!EYE;lsSet("eye",EYE?"1":"0");viewHome()};
