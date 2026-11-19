@@ -1,7 +1,7 @@
 /**
  * @OnlyCurrentDoc
  */
-// Financial Planner - Google Sheets backend and website.
+// Expat Financial Planner - Google Sheets backend and website.
 // A budget planner for people who earn in one currency and live in another.
 // Setup: see README.md. Your budgets, income, currencies, pay day and accounts
 // are set inside the app (Settings screen). Your Claude API key is stored
@@ -10,7 +10,7 @@
 const TX_SHEET = 'Transactions';
 const SET_SHEET = 'Settings';
 const SUM_SHEET = 'Summary';
-const TX_HEAD = ['ID','Date','Type','Category','Amount','Currency','Home amount','Account','To account','Note','Source','Created','Who','Reviewed'];
+const TX_HEAD = ['ID','Date','Type','Category','Amount','Currency','Home amount','Account','To account','Note','Source','Created','Who','Reviewed','Rate'];
 const CAT_NAMES = {groceries:'Groceries',rent:'Rent or housing',utilities:'Utilities (water, power, internet)',transport:'Transport',shopping:'Shopping and online orders',food:'Food delivery and eating out',debt:'Debt payment',phone:'Phone and subscriptions',ai:'AI and software subscriptions',health:'Health and pharmacy',personal:'Personal care',visa:'Travel, visas and legal',fees:'Bank, ATM and card fees',giving:'Giving and family',cash:'Cash spent (not sorted)',other:'Other'};
 
 const DEFAULT_SETTINGS = {
@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS = {
 function doGet() {
   setup_();
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('Financial Planner')
+    .setTitle('Expat Financial Planner')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -43,6 +43,10 @@ function setup_() {
     tx.getRange(1, 1, 1, TX_HEAD.length).setValues([TX_HEAD]).setFontWeight('bold');
     tx.setFrozenRows(1);
     tx.getRange('B:B').setNumberFormat('@');
+  }
+  if (tx.getLastColumn() < TX_HEAD.length || !tx.getRange(1, 15).getValue()) {
+    tx.getRange(1, 15).setValue('Rate').setFontWeight('bold');
+    tx.getRange(1, 15).setNote('Wise exchange rate on the day of the transaction, locked when it was saved.');
   }
   let st = ss.getSheetByName(SET_SHEET);
   if (!st) {
@@ -96,22 +100,32 @@ function getData() {
   setup_();
   const sh = ss_().getSheetByName(TX_SHEET);
   const n = sh.getLastRow() - 1;
-  const rows = n > 0 ? sh.getRange(2, 1, n, 13).getValues() : [];
+  if (n > 0) lockOldRates_(sh, n);
+  const rows = n > 0 ? sh.getRange(2, 1, n, 15).getValues() : [];
   const tx = rows.filter(r => r[0]).map(r => ({
     id: String(r[0]), date: r[1] instanceof Date ? Utilities.formatDate(r[1], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(r[1]),
     kind: r[2], category: r[3], amount: +r[4], currency: r[5], usd: +r[6], account: r[7], toAccount: r[8] || null,
-    note: r[9], source: r[10], createdAt: +r[11] || 0, who: r[12] || ''
+    note: r[9], source: r[10], createdAt: +r[11] || 0, who: r[12] || '', rate: +r[14] || 0
   }));
   return {settings: readSettings_(), tx: tx};
 }
 
 function rowOf_(t) {
-  return [t.id || Utilities.getUuid(), String(t.date), t.kind, t.category, +t.amount, t.currency, +t.usd, t.account, t.toAccount || '', t.note || '', t.source || 'manual', t.createdAt || Date.now(), Session.getActiveUser().getEmail() || '', ''];
+  return [t.id || Utilities.getUuid(), String(t.date), t.kind, t.category, +t.amount, t.currency, +t.usd, t.account, t.toAccount || '', t.note || '', t.source || 'manual', t.createdAt || Date.now(), Session.getActiveUser().getEmail() || '', '', +t.rate || ''];
 }
 
 function addTx(t) { return addTxBatch([t])[0]; }
 
+// Saves transactions with the exchange rate locked in, and returns the
+// locked rate and home amount for each one.
+function addTxLocked(list) {
+  addTxBatch(list);
+  return list.map(t => ({id: t.id, rate: t.rate, usd: t.usd}));
+}
+
 function addTxBatch(list) {
+  const s = readSettings_();
+  list.forEach(t => lockRate_(t, s));
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     const sh = ss_().getSheetByName(TX_SHEET);
@@ -157,6 +171,78 @@ function saveBalances(b) {
   out.balances = {date: String(b && b.date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')), ts: Date.now(), items: items};
   writeSettings_(out);
   return readSettings_();
+}
+
+// ---------- exchange rates locked to the day ----------
+// Every transaction keeps Wise's rate for the day it happened, so a payment
+// made at one rate is never recalculated at a later rate.
+
+// Wise's daily rates for the last year, as {"2026-11-12": 63.3554, ...}.
+function ratesByDay_(source, target) {
+  const cache = CacheService.getScriptCache();
+  const ck = 'wiseh_' + source + '_' + target;
+  const hit = cache.get(ck);
+  if (hit) return JSON.parse(hit);
+  try {
+    const res = UrlFetchApp.fetch('https://wise.com/rates/history?source=' + source + '&target=' + target + '&length=1&resolution=daily&unit=year', {muteHttpExceptions: true});
+    if (res.getResponseCode() !== 200) return null;
+    const out = {};
+    JSON.parse(res.getContentText()).forEach(x => { if (x && x.value > 0) out[new Date(+x.time).toISOString().slice(0, 10)] = +x.value; });
+    cache.put(ck, JSON.stringify(out), 21600);
+    return out;
+  } catch (e) { return null; }
+}
+
+// Wise's rate for one day. Uses the live rate for today, and the closest
+// earlier day if that day has no rate (for example a weekend).
+function rateOn_(source, target, date) {
+  if (!source || !target || source === target) return 1;
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  if (!date || String(date) >= today) { const live = getWiseRate(source, target); if (live && live.rate > 0) return live.rate; }
+  const days = ratesByDay_(source, target) || {};
+  const d = new Date(String(date || today) + 'T00:00:00Z');
+  for (let i = 0; i < 10; i++) {
+    const k = d.toISOString().slice(0, 10);
+    if (days[k]) return days[k];
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  const live = getWiseRate(source, target);
+  return live && live.rate > 0 ? live.rate : 0;
+}
+
+// Sets t.rate and t.usd (the home-currency amount) from the rate on t.date.
+// t.rate is how many of the transaction's currency equal 1 of your home
+// currency, or for home-currency entries, how many local units equal 1.
+function lockRate_(t, s) {
+  const home = s.homeCur, cur = String(t.currency || home);
+  const other = cur === home ? s.localCur : cur;
+  let rate = other === home ? 1 : rateOn_(home, other, t.date);
+  if (!(rate > 0)) rate = other === s.localCur ? (+s.rate || 1) : 1;
+  t.rate = Math.round(rate * 10000) / 10000;
+  t.usd = cur === home ? Math.round(+t.amount * 100) / 100 : Math.round(+t.amount / t.rate * 100) / 100;
+  return t;
+}
+
+// Gives older transactions that have no locked rate yet the Wise rate for
+// their own date, and corrects their home-currency amount to match.
+function lockOldRates_(sh, n) {
+  const vals = sh.getRange(2, 1, n, 15).getValues();
+  const todo = [];
+  vals.forEach((r, i) => { if (r[0] && !(+r[14] > 0)) todo.push(i); });
+  if (!todo.length) return 0;
+  const s = readSettings_();
+  const tz = Session.getScriptTimeZone();
+  const g = vals.map(r => [r[6]]), o = vals.map(r => [r[14]]);
+  let done = 0;
+  todo.forEach(i => {
+    const r = vals[i];
+    const t = {date: r[1] instanceof Date ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd') : String(r[1]), amount: +r[4], currency: r[5]};
+    lockRate_(t, s);
+    if (t.rate > 0) { g[i] = [t.usd]; o[i] = [t.rate]; done++; }
+  });
+  sh.getRange(2, 7, n, 1).setValues(g);
+  sh.getRange(2, 15, n, 1).setValues(o);
+  return done;
 }
 
 // ---------- live exchange rate ----------
