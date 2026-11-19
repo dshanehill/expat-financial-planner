@@ -7,14 +7,15 @@ const CATS=[
  ["giving","Giving and family"],["cash","Cash spent (not sorted)"],["other","Other"]];
 const CATNAME=Object.fromEntries(CATS);
 let ACCOUNTS=["Cash","Bank","Credit card","E-wallet"];
-const DEFAULTS={configured:false,homeCur:"USD",localCur:"USD",rate:1,defaultCurrency:"USD",weeklyGrocery:0,
- budgets:{},
+const DEFAULTS={configured:false,homeCur:"USD",localCur:"USD",rate:1,liveRate:true,payDay:1,selfName:"",defaultCurrency:"USD",weeklyGrocery:0,
+ budgets:{},budgetsCur:{},balances:{},
  income:[{name:"Main income",usd:0}],
  accounts:["Cash","Bank","Credit card","E-wallet"],
  debtStart:0,debtStartMonth:monthKey(new Date())};
 let S=JSON.parse(JSON.stringify(DEFAULTS));
 let TX=[];let db=null,user=null,sample=null,tts=null,dict=null;let loaded=false,dbState="connecting";
 let importRows=[];let addKind="expense";
+let EYE=lsGet("eye")!=="0";var WISE={rate:0,time:0};
 const $=s=>document.querySelector(s);
 const app=$("#app");
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
@@ -24,9 +25,16 @@ function monthKey(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)}
 function today(){return dateKey(new Date())}
 const SYM={USD:"$",EUR:"€",GBP:"£",JPY:"¥",PHP:"₱",INR:"₹",KRW:"₩",NGN:"₦",VND:"₫",THB:"฿"};
 function fmt(n,cur){n=Math.round((+n||0)*100)/100;const s=SYM[cur]||((cur||"")+" ");return (n<0?"-":"")+s+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
-function usd(n){return fmt(n,S.homeCur)}
+function twoCur(){return S.localCur&&S.homeCur&&S.localCur!==S.homeCur}
+function rateNow(){return (S.liveRate!==false&&WISE&&WISE.rate)||(+S.rate||1)}
+function fmt0(n,cur){const v=Math.round(+n||0);const s=SYM[cur]||((cur||"")+" ");return (v<0?"-":"")+s+Math.abs(v).toLocaleString("en-US")}
+function usd0(n){return fmt(n,S.homeCur)}
+function usd(n){return twoCur()?usd0(n)+" ("+fmt0((+n||0)*rateNow(),S.localCur)+")":usd0(n)}
+function usdP(n,local){if(local==null||!twoCur())return usd(n);return usd0(n)+" ("+fmt0(local,S.localCur)+")"}
 function php(n){return fmt(n,S.localCur)}
-function toUsd(amount,cur){return cur===S.homeCur?amount:amount/(+S.rate||1)}
+function toUsd(amount,cur){return cur===S.homeCur?amount:amount/rateNow()}
+function inCur(t,cur){if(t.currency===cur)return +t.amount||0;const h=+t.usd||0;return cur===S.homeCur?h:h*rateNow()}
+function hid(v){return EYE?usd(v):"••••••"}
 function curs(){return [...new Set([S.localCur,S.homeCur].filter(Boolean))]}
 function curOptions(sel){return curs().map(c=>`<option${c===sel?" selected":""}>${esc(c)}</option>`).join("")}
 function weekStart(d){const x=new Date(d);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);return dateKey(x)}
@@ -37,30 +45,46 @@ function applyLook(){document.documentElement.style.setProperty("--fs",(lsGet("f
 applyLook();
 
 // ---------- numbers ----------
-function monthlyPlan(){const b=S.budgets||{};let total=(S.weeklyGrocery||0)*52/12;for(const k in b)total+=+b[k]||0;return total}
+function monthlyPlan(){let total=(S.weeklyGrocery||0)*52/12;for(const [k] of CATS)if(k!=="groceries")total+=catBudget(k);return total}
 function incomeTotal(){return (S.income||[]).reduce((a,i)=>a+(+i.usd||0),0)}
+function ymd(s){const p=String(s).split("-").map(Number);return new Date(p[0],p[1]-1,p[2])}
+function cycleStartOf(y,m){const d=Math.max(1,Math.min(31,+S.payDay||1));return new Date(y,m,Math.min(d,new Date(y,m+1,0).getDate()))}
+function cycle(d){d=d||new Date();let s=cycleStartOf(d.getFullYear(),d.getMonth());if(dateKey(d)<dateKey(s))s=cycleStartOf(d.getFullYear(),d.getMonth()-1);const n=cycleStartOf(s.getFullYear(),s.getMonth()+1);const e=new Date(n);e.setDate(e.getDate()-1);return{start:dateKey(s),next:dateKey(n),s,e,days:Math.max(1,Math.round((n-s)/864e5))}}
+function cycleLabel(c){const f=x=>x.toLocaleString("en-US",{month:"short",day:"numeric"});return f(c.s)+" to "+f(c.e)}
+function balanceNow(){const b=S.balances||{};const ts=+b.ts||(b.date?ymd(b.date).getTime():0);
+ const items=(b.items||[]).map(x=>({name:x.name,start:+x.amount||0,amount:+x.amount||0,currency:x.currency||S.homeCur}));const by={};items.forEach(x=>by[x.name]=x);
+ let n=0;if(b.date)for(const t of TX){if((+t.createdAt||0)<=ts||(t.date||"")<b.date)continue;const from=by[t.account],to=by[t.toAccount];
+  if(t.kind==="expense"&&from){from.amount-=inCur(t,from.currency);n++}
+  else if(t.kind==="income"&&from){from.amount+=inCur(t,from.currency);n++}
+  else if(t.kind==="transfer"){if(from)from.amount-=inCur(t,from.currency);if(to)to.amount+=inCur(t,to.currency);if(from||to)n++}}
+ items.forEach(x=>{x.amount=Math.round(x.amount*100)/100;x.home=x.currency===S.homeCur?x.amount:x.currency===S.localCur?x.amount/rateNow():x.amount});
+ return{items,date:b.date||"",now:items.reduce((a,x)=>a+x.home,0),changes:n}}
 function stats(){
- const now=new Date(),mk=monthKey(now),wk=weekStart(now);
- const r={spent:0,income:0,byCat:{},weekGroceries:0,cashIn:0,cashOut:0,debtPaid:0,count:0};
+ const now=new Date(),cy=cycle(now),wk=weekStart(now);
+ const r={spent:0,income:0,byCat:{},byCatLocal:{},weekGroceries:0,cashIn:0,cashOut:0,debtPaid:0,count:0};
  for(const t of TX){
   const v=+t.usd||0;
   if(t.kind==="expense"&&t.category==="debt"&&(t.date||"").slice(0,7)>=S.debtStartMonth)r.debtPaid+=v;
   if(t.kind==="expense"&&t.category==="groceries"&&t.date>=wk)r.weekGroceries+=v;
-  if((t.date||"").slice(0,7)!==mk)continue;
+  if((t.date||"")<cy.start||(t.date||"")>=cy.next)continue;
   r.count++;
-  if(t.kind==="expense"){r.spent+=v;r.byCat[t.category]=(r.byCat[t.category]||0)+v;if(t.account==="Cash")r.cashOut+=v}
+  if(t.kind==="expense"){r.spent+=v;r.byCat[t.category]=(r.byCat[t.category]||0)+v;r.byCatLocal[t.category]=(r.byCatLocal[t.category]||0)+inCur(t,S.localCur);if(t.account==="Cash")r.cashOut+=v}
   else if(t.kind==="income")r.income+=v;
   else if(t.kind==="transfer"&&t.toAccount==="Cash")r.cashIn+=v;
  }
  return r;
 }
-function catBudget(k){if(k==="groceries")return (S.weeklyGrocery||0)*52/12;return +(S.budgets||{})[k]||0}
-function level(spent,budget){if(budget<=0)return spent>0?"bad":"ok";const p=spent/budget;return p>=1?"bad":p>=.8?"warn":"ok"}
+function catBudget(k){if(k==="groceries")return (S.weeklyGrocery||0)*52/12;const v=+(S.budgets||{})[k]||0;return (S.budgetsCur||{})[k]===S.localCur&&twoCur()?v/rateNow():v}
+function isLocalBudget(k){return twoCur()&&(S.budgetsCur||{})[k]===S.localCur}
+function catSpent(st,k){return isLocalBudget(k)?(st.byCatLocal[k]||0)/rateNow():(st.byCat[k]||0)}
+const FIXED=["rent","utilities","debt"];
+function level(spent,budget){if(budget<=0)return spent>0?"bad":"ok";const p=spent/budget;return p>=1?"bad":p>=.75?"warn":"ok"}
 function barHtml(spent,budget){const lv=level(spent,budget);const p=budget>0?Math.min(100,spent/budget*100):(spent>0?100:0);return `<div class="bar" aria-hidden="true"><span class="fill-${lv}" style="width:${p}%"></span></div>`}
 
 // ---------- views ----------
 function render(){
  const v=(location.hash||"#home").slice(1);
+ app.classList.toggle("wide",v==="home");const td=$("#topdate");if(td)td.textContent=new Date().toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
  document.querySelectorAll("nav a").forEach(a=>a.setAttribute("aria-current",a.dataset.v===v?"page":"false"));
  if(v==="add")return viewAdd();
  if(v==="history")return viewHistory();
@@ -75,48 +99,65 @@ function storageNote(){
  return `<div class="alert">Can't reach your Google Sheet right now. Check your internet and press Refresh on Home.</div>`;
 }
 function alertsList(st){
- const out=[];const now=new Date();const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();const day=now.getDate();
+ const out=[];const now=new Date();const cy=cycle(now);const dim=cy.days;const day=Math.floor((ymd(dateKey(now))-ymd(cy.start))/864e5)+1;
  if(S.weeklyGrocery>0&&st.weekGroceries>=S.weeklyGrocery)out.push(["bad",`Groceries this week are over budget: ${usd(st.weekGroceries)} of ${usd(S.weeklyGrocery)}.`]);
  else if(S.weeklyGrocery>0&&st.weekGroceries>=S.weeklyGrocery*.8)out.push(["w",`Groceries this week: ${usd(S.weeklyGrocery-st.weekGroceries)} left.`]);
- for(const [k,n] of CATS){if(k==="groceries"||k==="debt")continue;const s=st.byCat[k]||0;const b=catBudget(k);if(!s)continue;
+ for(const [k,n] of CATS){if(k==="groceries"||k==="debt")continue;const s=catSpent(st,k);const b=catBudget(k);if(!s)continue;
+  if(b>0&&Math.abs(s-b)<=b*0.01){if(FIXED.includes(k))continue;out.push(["i",`${n}: the full budget is used.`]);continue}
   if(b<=0)out.push(["w",`${n}: ${usd(s)} spent and there's no budget for it.`]);
-  else if(s>=b)out.push(["bad",`${n} is over budget: ${usd(s)} of ${usd(b)}.`]);
-  else if(s>=b*.8)out.push(["w",`${n} is almost used up: ${usd(b-s)} left.`]);}
- const living=st.spent-(st.byCat.debt||0);const livingPlan=monthlyPlan()-(+S.budgets.debt||0);
+  else if(s>=b)out.push(["bad",`${n} has reached its limit: ${usd(s)} of ${usd(b)}${s>b?", "+usd(s-b)+" over":""}.`]);
+  else if(s>=b*.75)out.push(["w",`${n} is 75% used: ${usd(b-s)} left.`]);
+  else if(s>=b*.5)out.push(["i",`${n} is halfway used: ${usd(b-s)} left.`]);}
+ const living=st.spent-FIXED.reduce((a,k)=>a+(st.byCat[k]||0),0);const livingPlan=monthlyPlan()-FIXED.reduce((a,k)=>a+catBudget(k),0);
  const pace=day>3?living/day*dim:0;
- if(pace>livingPlan*1.05)out.push(["bad",`At this pace you'll spend about ${usd(pace)} this month on living costs. Your plan is ${usd(livingPlan)}.`]);
- const unacc=st.cashIn-st.cashOut;if(unacc>20)out.push(["w",`${usd(unacc)} in cash withdrawn this month isn't accounted for yet.`]);
+ if(pace>livingPlan*1.05)out.push(["bad",`At this pace your day-to-day spending will be about ${usd(pace)} this pay cycle. Your plan is ${usd(livingPlan)} (not counting rent, utilities and debt).`]);
+ const unacc=st.cashIn-st.cashOut;if(unacc>20)out.push(["w",`${usd(unacc)} in cash withdrawn this pay cycle isn't accounted for yet.`]);
  return out;
 }
 function viewHome(){
- const st=stats();const plan=monthlyPlan();const inc=incomeTotal();const left=inc-st.spent;
+ const st=stats();const plan=monthlyPlan();const inc=incomeTotal();const left=inc-st.spent;const cy=cycle();
  const debtLeft=Math.max(0,(+S.debtStart||0)-st.debtPaid);const months=S.budgets.debt>0?Math.ceil(debtLeft/S.budgets.debt):0;
- const al=alertsList(st);
- const mName=new Date().toLocaleString("en-US",{month:"long"});
- let h=`${storageNote()}<h1>${mName}</h1>
- <div class="card"><div class="muted">Spent this month</div><div class="big">${usd(st.spent)}</div>
- ${barHtml(st.spent,plan)}<div class="row"><span>Plan ${usd(plan)}</span><span class="${level(st.spent,plan)}">${plan-st.spent>=0?usd(plan-st.spent)+" left":usd(st.spent-plan)+" over"}</span></div>
- <div class="row" style="margin-top:8px"><span>Monthly income</span><span>${usd(inc)}</span></div>
- <div class="row"><span>Income minus spending</span><span class="${left>=0?"ok":"bad"}">${usd(left)}</span></div></div>
+ const al=alertsList(st);const bn=balanceNow();
+ const daysLeft=Math.max(1,Math.round((ymd(cy.next)-ymd(today()))/864e5));
+ const rateLine=twoCur()?`<p class="muted">1 ${esc(S.homeCur)} = ${rateNow().toFixed(4)} ${esc(S.localCur)} ${WISE.rate&&S.liveRate!==false?"(live Wise rate"+(WISE.time?", "+new Date(WISE.time).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}):"")+")":"(your rate from Settings)"}</p>`:"";
+ let h=`${storageNote()}<div class="row"><h1>Pay cycle: ${esc(cycleLabel(cy))}</h1><button id="eye" aria-pressed="${!EYE}" title="Hide or show amounts">${EYE?"Hide amounts":"Show amounts"}</button></div>${rateLine}
+ <div class="cols"><div>`;
+ if(bn.items.length){
+  h+=`<div class="card"><div class="muted">Money you have now</div><div class="big">${hid(bn.now)}</div>
+  ${bn.items.map(x=>`<div class="row"><span>${esc(x.name)}</span><span>${EYE?(x.currency===S.homeCur?usd(x.amount):fmt(x.amount,x.currency)+(x.currency===S.localCur&&twoCur()?" ("+fmt(x.home,S.homeCur)+")":"")):"••••••"}</span></div>`).join("")}
+  <div class="muted" style="margin-top:6px">Counted from ${esc(bn.date)}${bn.changes?", with "+bn.changes+" entr"+(bn.changes>1?"ies":"y")+" since then":""}. About ${hid(bn.now/daysLeft)} a day until your next pay day, ${esc(ymd(cy.next).toLocaleDateString("en-US",{month:"short",day:"numeric"}))}.</div></div>`;
+ }else h+=`<div class="alert w">Add what's in each account today under Settings, "Money you have now", and this page will keep the total up to date as you spend.</div>`;
+ h+=`<div class="card"><div class="muted">Spent this pay cycle</div><div class="big">${hid(st.spent)}</div>
+ ${barHtml(st.spent,plan)}<div class="row"><span>Plan ${hid(plan)}</span><span class="${level(st.spent,plan)}">${EYE?(plan-st.spent>=0?usd(plan-st.spent)+" left":usd(st.spent-plan)+" over"):"••••••"}</span></div>
+ <div class="row" style="margin-top:8px"><span>Income each cycle</span><span>${hid(inc)}</span></div>
+ <div class="row"><span>Income minus spending</span><span class="${left>=0?"ok":"bad"}">${hid(left)}</span></div></div>
  <div class="grid2"><button class="primary" id="speak">Read summary out loud</button><button id="refresh">Refresh</button></div>
- <button id="review" style="width:100%;margin-top:10px">Review categories with Claude</button><p id="rstat" role="status" style="font-weight:700"></p>`;
- if(al.length)h+=`<h2>Watch out</h2>`+al.map(a=>`<div class="alert ${a[0]==="w"?"w":""}">${esc(a[1])}</div>`).join("");
- if(!S.configured)h+=`<div class="alert w">Welcome! Open Settings to enter your income, budget, currencies and accounts.</div>`;
- h+=`<div class="card"><div class="row"><strong>Groceries this week</strong><span class="${level(st.weekGroceries,S.weeklyGrocery)}">${usd(st.weekGroceries)} of ${usd(S.weeklyGrocery)}</span></div>${barHtml(st.weekGroceries,S.weeklyGrocery)}<div class="muted">Week starts Monday.</div></div>
- ${(+S.debtStart||0)>0?`<div class="card"><div class="row"><strong>Debt left</strong><span class="big">${usd(debtLeft)}</span></div>${barHtml(st.debtPaid,+S.debtStart||1)}
- <div class="muted">${usd(st.debtPaid)} paid of ${usd(S.debtStart)}. ${debtLeft>0&&months?`About ${months} more month${months>1?"s":""} at ${usd(S.budgets.debt)} a month.`:debtLeft<=0?"Paid off!":""}</div></div>`:""}
- <h2>Categories this month</h2>`;
- for(const [k,n] of CATS){const s=st.byCat[k]||0;const b=catBudget(k);if(!s&&!b)continue;
-  h+=`<div class="card"><div class="row"><strong>${esc(n)}</strong><span class="${level(s,b)}">${usd(s)}${b?" of "+usd(b):""}</span></div>${b||s?barHtml(s,b):""}</div>`}
+ <div class="grid2" style="margin-top:10px"><button id="review">Check categories with Claude</button><button id="brief">AI money check-in</button></div><p id="rstat" role="status" style="font-weight:700;white-space:pre-wrap"></p>`;
+ if(al.length)h+=`<h2>Watch out</h2>`+al.map(a=>`<div class="alert ${a[0]==="w"?"w":a[0]==="i"?"i":""}">${esc(a[1])}</div>`).join("");
+ if(!S.configured)h+=`<div class="alert w">Welcome! Open Settings to enter your currencies, pay day, income, budgets and accounts.</div>`;
+ h+=`</div><div>`;
+ if(S.weeklyGrocery>0)h+=`<div class="card"><div class="row"><strong>Groceries this week</strong><span class="${level(st.weekGroceries,S.weeklyGrocery)}">${hid(st.weekGroceries)} of ${hid(S.weeklyGrocery)}</span></div>${barHtml(st.weekGroceries,S.weeklyGrocery)}<div class="muted">Week starts Monday.</div></div>`;
+ if((+S.debtStart||0)>0)h+=`<div class="card"><div class="row"><strong>Debt left</strong><span class="big">${hid(debtLeft)}</span></div>${barHtml(st.debtPaid,+S.debtStart||1)}
+ <div class="muted">${hid(st.debtPaid)} paid of ${hid(S.debtStart)}. ${debtLeft>0&&months?`About ${months} more month${months>1?"s":""} at ${hid(S.budgets.debt)} a month.`:debtLeft<=0?"Paid off!":""}</div></div>`;
+ h+=`<h2>Categories this pay cycle</h2>`;
+ for(const [k,n] of CATS){const sp=catSpent(st,k);const b=catBudget(k);if(!sp&&!b)continue;
+  h+=`<div class="card"><div class="row"><strong>${esc(n)}</strong><span class="${level(sp,b)}">${EYE?usdP(sp,st.byCatLocal[k])+(b?" of "+usd(b):""):"••••••"}</span></div>${b||sp?barHtml(sp,b):""}</div>`}
+ h+=`</div></div>`;
  app.innerHTML=h;
+ $("#eye").onclick=()=>{EYE=!EYE;lsSet("eye",EYE?"1":"0");viewHome()};
  $("#speak").onclick=()=>speak(summaryText(st));
- $("#refresh").onclick=()=>{toast("Refreshing…");load()};
+ $("#refresh").onclick=()=>{toast("Refreshing…");refreshRate();load()};
  $("#review").onclick=()=>{const s=$("#rstat");if(!S.hasKey){s.textContent="Add your Claude API key in Settings first.";return}s.className="";s.textContent="Claude is checking your transactions…";runReview(s,false)};
+ $("#brief").onclick=async()=>{const s=$("#rstat");if(!S.hasKey){s.textContent="Add your Claude API key in Settings first.";return}s.className="";s.textContent="Claude is writing your check-in…";
+  const facts={payCycle:cycleLabel(cy),daysLeft,spent:+st.spent.toFixed(2),plan:+plan.toFixed(2),income:inc,moneyNow:+bn.now.toFixed(2),rate:rateNow(),categories:CATS.map(([k,n])=>({name:n,spent:+(st.byCat[k]||0).toFixed(2),budget:+catBudget(k).toFixed(2)})).filter(c=>c.spent||c.budget),alerts:al.map(a=>a[1])};
+  try{const r=await gs("moneyBriefing",facts);s.textContent=r.error||r.text}catch(e){s.className="bad";s.textContent="The check-in didn't work. Try again."}};
 }
 function summaryText(st){
  const plan=monthlyPlan();const debtLeft=Math.max(0,(+S.debtStart||0)-st.debtPaid);
- let s=`This month you've spent ${usd(st.spent)} out of your ${usd(plan)} plan. `;
- s+=`Groceries this week are ${usd(st.weekGroceries)} out of ${usd(S.weeklyGrocery)}. `;
+ const bn=balanceNow();
+ let s=bn.items.length?`You have ${usd(bn.now)} now. `:"";
+ s+=`This pay cycle you've spent ${usd(st.spent)} out of your ${usd(plan)} plan. `;
+ if(S.weeklyGrocery>0)s+=`Groceries this week are ${usd(st.weekGroceries)} out of ${usd(S.weeklyGrocery)}. `;
  const al=alertsList(st);if(al.length)s+="Things to watch: "+al.map(a=>a[1]).join(" ")+" ";else s+="Everything is within budget. ";
  if((+S.debtStart||0)>0)s+=`Your debt left is ${usd(debtLeft)}.`;return s;
 }
@@ -274,7 +315,7 @@ async function runImport(){
    try{const r=await sample.json(importPrompt(acct,chunks[i]),{modelTier:"default"});if(Array.isArray(r))rows=rows.concat(r);else if(r&&Array.isArray(r.transactions))rows=rows.concat(r.transactions)}
    catch(e){if(e&&e.code==="not_granted"){sample=null;rows=basicParse(text,acct);break}if(e&&e.code==="rate_limited"){st.textContent="Too many requests. Wait a minute and try again.";return}}
   }
- }else rows=basicParse(text,acct);
+ }else rows=isWise(text)?parseWiseText(text):basicParse(text,acct);
  rows=rows.map(r=>normRow(r,acct)).filter(Boolean);
  if(!rows.length){st.textContent="I couldn't find any transactions in that. Try the CSV version of the statement.";st.className="bad";return}
  markDupes(rows);importRows=rows;
@@ -320,10 +361,10 @@ function basicParse(text,acct){
  return out;
 }
 function normRow(r,acct){
- const amount=Math.abs(+r.amount||0);const date=parseDate(r.date);if(!amount||!date)return null;
- const currency=curs().includes(String(r.currency||"").toUpperCase())?String(r.currency).toUpperCase():S.defaultCurrency;let kind=["expense","income","transfer"].includes(r.kind)?r.kind:"expense";
+ const amount=Math.abs(+r.amount||0)*(r.refund?-1:1);const date=parseDate(r.date);if(!amount||!date)return null;
+ const currency=/^[A-Z]{3}$/.test(String(r.currency||"").toUpperCase())?String(r.currency).toUpperCase():S.defaultCurrency;let kind=["expense","income","transfer"].includes(r.kind)?r.kind:"expense";
  let category=kind==="expense"?(CATNAME[r.category]?r.category:guessCat(r.description||"")):kind;
- const row={keep:true,date,note:String(r.description||"").slice(0,120),amount:Math.round(amount*100)/100,currency,kind,category,account:acct,toAccount:kind==="transfer"?(r.toAccount||"Savings"):null};
+ const row={keep:true,date,note:String(r.description||"").slice(0,120),amount:Math.round(amount*100)/100,currency,kind,category,account:acct,toAccount:kind==="transfer"?(r.toAccount||"Other account"):null};
  row.fee=+r.fee>0?Math.round(+r.fee*100)/100:0;return row;
 }
 function markDupes(rows){
@@ -407,12 +448,46 @@ function parseStatementText(text,acct){
  }
  const seen=new Set();return rows.filter(r=>{const k=r.date+"|"+r.amount+"|"+r.description.toLowerCase();if(seen.has(k))return false;seen.add(k);return true});
 }
+function isWise(text){return /\| Transaction:/.test(text)&&/wise/i.test(text)}
+function parseWiseText(text){
+ const head=text.match(/\b([A-Z]{3}) statement\b/);const C=head?head[1]:S.homeCur;
+ const me=String(S.selfName||"").trim().toLowerCase();
+ const lines=text.split(/\r?\n/).map(l=>l.replace(/\s+/g," ").trim()).filter(Boolean);
+ const blocks=[];let cur=null;
+ for(const L of lines){
+  const m=L.match(/^(.*)\s(-?[\d,]+\.\d\d)\s(-?[\d,]+\.\d\d)$/);
+  const d=L.match(/^(\d{1,2} \w+ \d{4})\s*\|.*Transaction:\s*(\S+)/);
+  if(d&&cur){cur.date=parseDate(d[1]);blocks.push(cur);cur=null;continue}
+  if(m&&!/^ref:/i.test(L)){cur={desc:m[1],amt:parseFloat(m[2].replace(/,/g,""))};continue}
+  if(cur&&!/^ref:/i.test(L))cur.desc+=" "+L;
+ }
+ const rows=[],fees={},cards=[];
+ for(const b of blocks){
+  const d=b.desc.replace(/\s+/g," ").trim();const out=-b.amt;
+  if(/^Topped up account/i.test(d)||!b.date)continue;
+  if(/^Wise Charges for/i.test(d)){fees[b.date]=(fees[b.date]||0)+out;continue}
+  const card=d.match(/^Card transaction of ([\d,]+\.\d\d) (\w{3}) issued by (.*?)(?: \(fee:.*)?$/i);
+  if(card){cards.push({date:b.date,merch:card[3],out});continue}
+  const sent=d.match(/^Sent money to (.*?)(?: \(fee:.*)?$/i);
+  if(sent&&me&&sent[1].toLowerCase().startsWith(me)){rows.push({date:b.date,description:"Sent money to myself",amount:out,currency:C,kind:"transfer",toAccount:"Other account",fee:0});continue}
+  if(sent){rows.push({date:b.date,description:"Sent money to "+sent[1],amount:Math.abs(out),refund:out<0,currency:C,kind:"expense",category:"giving",fee:0});continue}
+  if(/^Received money from/i.test(d)&&out<0){rows.push({date:b.date,description:d.slice(0,80),amount:-out,currency:C,kind:"income",category:"income",fee:0});continue}
+  if(/^Converted/i.test(d)){rows.push({date:b.date,description:"Converted "+C+" in Wise",amount:out,currency:C,kind:"transfer",toAccount:"Wise "+(S.localCur!==C?S.localCur:"balance"),fee:0});continue}
+  rows.push({date:b.date,description:d.slice(0,80),amount:Math.abs(out),refund:out<0,currency:C,kind:"expense",category:guessCat(d),fee:0});
+ }
+ // a card hold and its release on the same day cancel out
+ const used=new Set();
+ cards.forEach((a,i)=>{if(a.out<0&&!used.has(i)){const j=cards.findIndex((b,k)=>!used.has(k)&&k!==i&&b.date===a.date&&b.merch===a.merch&&Math.abs(b.out+a.out)<0.005);if(j>=0){used.add(i);used.add(j)}}});
+ cards.forEach((c,i)=>{if(!used.has(i))rows.push({date:c.date,description:c.merch+(c.out<0?" (refund)":""),amount:Math.abs(c.out),refund:c.out<0,currency:C,kind:"expense",category:guessCat(c.merch),fee:0})});
+ for(const dt in fees)rows.push({date:dt,description:"Wise fees",amount:Math.round(fees[dt]*100)/100,currency:C,kind:"expense",category:"fees",fee:0});
+ return rows;
+}
 async function autoImport(file,pw,stat){
  stat.className="";stat.textContent="Reading "+file.name+"…";
  let text;try{text=await fileText(file,pw)}catch(e){stat.className="bad";stat.textContent=e.message;return}
  const pick=$("#aacct").value;const acct=pick!=="auto"?pick:detectAccount(text+" "+file.name);
  if(!acct){stat.className="bad";stat.textContent="I couldn't tell which account this is from. Choose it in the box above, then press Save statement again.";return}
- const isPdf=/\.pdf$/i.test(file.name);let rows=isPdf?parseStatementText(text,acct):basicParse(text,acct);
+ const isPdf=/\.pdf$/i.test(file.name);let rows=isWise(text)?parseWiseText(text):isPdf?parseStatementText(text,acct):basicParse(text,acct);
  if(!rows.length&&!isPdf)rows=parseStatementText(text,acct);
  rows=rows.map(r=>normRow(r,acct)).filter(Boolean);
  if(!rows.length){stat.className="bad";stat.textContent="I couldn't find any transactions in that file. If it's a scanned picture, use the CSV download instead.";return}
@@ -441,18 +516,24 @@ function viewSettings(){
  <div class="card"><h2 style="margin-top:0">Currencies</h2>
  <label for="hc">Home currency (your budget and income are in this), for example USD</label><input id="hc" maxlength="3" value="${esc(S.homeCur)}" style="text-transform:uppercase">
  <label for="lc">Currency you spend in day to day, for example EUR or PHP (same as home if you only use one)</label><input id="lc" maxlength="3" value="${esc(S.localCur)}" style="text-transform:uppercase">
- <label for="rt">How many of your day-to-day currency equal 1 of your home currency</label><input id="rt" inputmode="decimal" value="${S.rate}">
+ <label class="chk"><input type="checkbox" id="lr"${S.liveRate!==false?" checked":""}> Use the live Wise exchange rate (updates every 15 minutes)</label>
+ <label for="rt">Backup rate: how many of your day-to-day currency equal 1 of your home currency. Used when the live rate can't be reached or is turned off.</label><input id="rt" inputmode="decimal" value="${S.rate}">
  <label for="dc">Usual currency when you add an expense</label><select id="dc">${curOptions(S.defaultCurrency)}</select></div>
- <div class="card"><h2 style="margin-top:0">Monthly income (home currency)</h2><div id="inclist">${inc.map((x,i)=>`<div class="grid2 incrow"><div><label for="in${i}">Source</label><input id="in${i}" class="incn" value="${esc(x.name)}" placeholder="Salary"></div><div><label for="ia${i}">Amount</label><input id="ia${i}" class="inca" inputmode="decimal" value="${x.usd||""}"></div></div>`).join("")}</div>
+ <div class="card"><h2 style="margin-top:0">Pay day</h2><label for="pd">Day of the month your main income usually arrives (1 to 31). Your budget "month" runs from this day to the day before the next one.</label><input id="pd" inputmode="numeric" value="${S.payDay||1}">
+ <label for="sn">Your full name as it appears on transfers (optional). Money you send to yourself is then counted as a transfer, not spending.</label><input id="sn" value="${esc(S.selfName||"")}" autocomplete="name"></div>
+ <div class="card"><h2 style="margin-top:0">Income each pay cycle (home currency)</h2><div id="inclist">${inc.map((x,i)=>`<div class="grid2 incrow"><div><label for="in${i}">Source</label><input id="in${i}" class="incn" value="${esc(x.name)}" placeholder="Salary"></div><div><label for="ia${i}">Amount</label><input id="ia${i}" class="inca" inputmode="decimal" value="${x.usd||""}"></div></div>`).join("")}</div>
  <button type="button" id="addinc" style="width:100%;margin-top:10px">Add another income source</button></div>
  <div class="card"><h2 style="margin-top:0">Your accounts</h2><label for="accts">Accounts and wallets, separated by commas</label><textarea id="accts" rows="3">${esc((S.accounts||ACCOUNTS).join(", "))}</textarea><p class="muted">Use the same names your banks use (for example "Chase, Revolut, PayPal, Cash") so uploaded statements are matched automatically.</p></div>
- <div class="card"><h2 style="margin-top:0">Budgets (home currency)</h2>
+ <div class="card"><h2 style="margin-top:0">Budgets</h2><p class="muted">Groceries are in your home currency. For the others, pick the currency you pay in, for example rent in local currency.</p>
  <label for="bg">Groceries per week</label><input id="bg" inputmode="decimal" value="${S.weeklyGrocery||""}">
- ${CATS.filter(([k])=>k!=="groceries"&&k!=="cash"&&k!=="other").map(([k,n])=>`<label for="b_${k}">${esc(n)} per month</label><input id="b_${k}" inputmode="decimal" value="${b[k]||""}">`).join("")}
+ ${CATS.filter(([k])=>k!=="groceries"&&k!=="cash"&&k!=="other").map(([k,n])=>`<label for="b_${k}">${esc(n)} per pay cycle</label><div class="grid2"><input id="b_${k}" inputmode="decimal" value="${b[k]||""}"><select id="bc_${k}" aria-label="${esc(n)} currency">${curOptions((S.budgetsCur||{})[k]||S.homeCur)}</select></div>`).join("")}
  <p class="muted">Leave a category empty if you have no budget for it. Any spending there will show a warning.</p></div>
  <div class="card"><h2 style="margin-top:0">Debt (optional)</h2><label for="ds">Debt total when you started paying it off</label><input id="ds" inputmode="decimal" value="${S.debtStart||""}">
  <label for="dm">Count payments from (month)</label><input id="dm" type="month" value="${esc(S.debtStartMonth)}"></div>
  <button class="primary" type="submit" style="width:100%">Save settings</button><p id="sstat" role="status" style="font-weight:700"></p></form>
+ <div class="card"><h2 style="margin-top:0">Money you have now</h2><p class="muted">Type what is in each account today. After you save, everything you add is counted automatically, so Home always shows what you have left.</p>
+ <div id="ballist">${(S.accounts||ACCOUNTS).map((a,i)=>{const it=((S.balances||{}).items||[]).find(x=>x.name===a)||{};return `<label for="ba${i}">${esc(a)}</label><div class="grid2"><input id="ba${i}" class="bal" data-name="${esc(a)}" inputmode="decimal" value="${it.amount!=null?it.amount:""}"><select id="bcur${i}" aria-label="${esc(a)} currency">${curOptions(it.currency||S.homeCur)}</select></div>`}).join("")}</div>
+ <button id="balsave" class="primary" style="width:100%;margin-top:10px">Save money I have now</button><p id="bstat" role="status" style="font-weight:700">${(S.balances||{}).date?"Last saved "+esc(S.balances.date)+".":""}</p></div>
  <div class="card"><h2 style="margin-top:0">Claude AI review</h2><p class="muted">${S.hasKey?"Your Claude API key is saved. Paste a new one to replace it.":"Paste your own Claude API key (from console.anthropic.com) so Claude can check that every expense is in the right category. It is stored privately in your Google script, never in the sheet."}</p>
  <label for="akey">Claude API key</label><input id="akey" type="password" autocomplete="off" placeholder="sk-ant-…">
  <button id="akeysave" class="primary" style="width:100%;margin-top:10px">Save key</button>${S.hasKey?`<button id="akeydel" style="width:100%;margin-top:10px">Remove saved key</button>`:""}<p id="akstat" role="status" style="font-weight:700"></p></div>
@@ -462,6 +543,8 @@ function viewSettings(){
  $("#addinc").onclick=()=>{const i=document.querySelectorAll(".incrow").length;$("#inclist").insertAdjacentHTML("beforeend",`<div class="grid2 incrow"><div><label for="in${i}">Source</label><input id="in${i}" class="incn" placeholder="Salary"></div><div><label for="ia${i}">Amount</label><input id="ia${i}" class="inca" inputmode="decimal"></div></div>`);$("#in"+i).focus()};
  $("#akeysave").onclick=async()=>{const k=$("#akey").value.trim();const s=$("#akstat");if(!/^sk-ant-/.test(k)){s.className="bad";s.textContent="That doesn't look like a Claude key. It starts with sk-ant-.";return}s.className="";s.textContent="Saving…";try{const ok=await gs("saveApiKey",k);$("#akey").value="";S.hasKey=true;s.textContent=ok?"Key saved and working.":"Key saved, but Claude didn't answer. Check the key and your credit."}catch(e){s.className="bad";s.textContent="Couldn't save the key."}};
  if($("#akeydel"))$("#akeydel").onclick=async()=>{const s=$("#akstat");const b=$("#akeydel");if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Tap again to remove the key";return}try{await gs("removeApiKey");S.hasKey=false;viewSettings();toast("Key removed.")}catch(e){s.className="bad";s.textContent="Couldn't remove the key."}};
+ $("#balsave").onclick=async()=>{const st=$("#bstat");const items=[...document.querySelectorAll(".bal")].map((x,i)=>({name:x.dataset.name,amount:parseFloat(x.value)||0,currency:$("#bcur"+i).value}));
+  st.className="";st.textContent="Saving…";try{S={...S,...(await gs("saveBalances",{date:today(),items}))};st.textContent="Saved. Home now counts from today.";toast("Money you have now saved.")}catch(e){st.className="bad";st.textContent="Couldn't save. Try again."}};
  $("#a1").onclick=()=>{lsSet("fs",Math.max(16,(+lsGet("fs")||20)-2));applyLook()};
  $("#a2").onclick=()=>{lsSet("fs",Math.min(32,(+lsGet("fs")||20)+2));applyLook()};
  $("#th").onclick=()=>{lsSet("theme",lsGet("theme")==="light"?"dark":"light");applyLook();viewSettings()};
@@ -471,17 +554,21 @@ function viewSettings(){
   const income=[...document.querySelectorAll(".incrow")].map(r=>({name:r.querySelector(".incn").value.trim(),usd:parseFloat(r.querySelector(".inca").value)||0})).filter(x=>x.name||x.usd);
   const accounts=$("#accts").value.split(",").map(x=>x.trim()).filter(Boolean);
   if(!accounts.length){st.className="bad";st.textContent="Add at least one account, for example Cash.";$("#accts").focus();return}
-  const dc=$("#dc").value;const next={...S,homeCur:hc,localCur:lc,rate:hc===lc?1:(n("#rt")||1),defaultCurrency:[hc,lc].includes(dc)?dc:lc,income,accounts,weeklyGrocery:n("#bg"),budgets:{},debtStart:n("#ds"),debtStartMonth:$("#dm").value||S.debtStartMonth};
-  for(const [k] of CATS)if(k!=="groceries"&&k!=="cash"&&k!=="other"&&$("#b_"+k))next.budgets[k]=n("#b_"+k);
+  const dc=$("#dc").value;const next={...S,homeCur:hc,localCur:lc,rate:hc===lc?1:(n("#rt")||1),liveRate:$("#lr").checked,payDay:Math.max(1,Math.min(31,Math.round(n("#pd")||1))),selfName:$("#sn").value.trim(),budgetsCur:{},defaultCurrency:[hc,lc].includes(dc)?dc:lc,income,accounts,weeklyGrocery:n("#bg"),budgets:{},debtStart:n("#ds"),debtStartMonth:$("#dm").value||S.debtStartMonth};
+  for(const [k] of CATS)if(k!=="groceries"&&k!=="cash"&&k!=="other"&&$("#b_"+k)){next.budgets[k]=n("#b_"+k);const c=$("#bc_"+k).value;next.budgetsCur[k]=[hc,lc].includes(c)?c:hc}
   st.className="";st.textContent="Saving…";
-  try{S={...next,...(await gs("saveSettings",next))};ACCOUNTS=S.accounts;toast("Settings saved.");viewSettings();$("#sstat").textContent="Settings saved."}catch(err){st.className="bad";st.textContent="Couldn't save settings."}};
+  try{S={...next,...(await gs("saveSettings",next))};ACCOUNTS=S.accounts;refreshRate();toast("Settings saved.");viewSettings();$("#sstat").textContent="Settings saved."}catch(err){st.className="bad";st.textContent="Couldn't save settings."}};
 }
 
 // ---------- startup ----------
-window.addEventListener("hashchange",()=>{importRows=location.hash==="#import"?importRows:importRows;render()});
-render();
+window.addEventListener("hashchange",()=>render());
+try{render()}catch(e){app.innerHTML=`<div class="alert w">Loading…</div>`}
+function refreshRate(){if(!twoCur()||S.liveRate===false)return;gs("getWiseRate",S.homeCur,S.localCur).then(r=>{if(r&&r.rate>0){WISE={rate:+r.rate,time:+r.time||Date.now()};if((location.hash||"#home")==="#home")render()}}).catch(()=>{})}
+setInterval(refreshRate,15*60*1000);
+setInterval(()=>{if(loaded&&!document.hidden&&(location.hash||"#home")==="#home")load()},60*1000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&loaded)load()});
 function load(){
- gs("getData").then(d=>{S={...DEFAULTS,...d.settings,budgets:{...(d.settings.budgets||{})}};ACCOUNTS=(S.accounts&&S.accounts.length?S.accounts:ACCOUNTS);TX=d.tx;dbState="ok";if(!S.configured&&!loaded)location.hash="#settings";const v=(location.hash||"#home").slice(1);if(v==="home"||v==="history"||!loaded)render();loaded=true})
+ gs("getData").then(d=>{const first=!loaded;S={...DEFAULTS,...d.settings,budgets:{...(d.settings.budgets||{})}};if(first)refreshRate();ACCOUNTS=(S.accounts&&S.accounts.length?S.accounts:ACCOUNTS);TX=d.tx;dbState="ok";if(!S.configured&&!loaded)location.hash="#settings";const v=(location.hash||"#home").slice(1);if(v==="home"||v==="history"||!loaded)render();loaded=true})
  .catch(()=>{dbState="none";render()});
 }
 load();
