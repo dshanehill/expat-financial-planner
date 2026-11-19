@@ -1,8 +1,10 @@
-# Financial Planner
+# Expat Financial Planner
 
 **A free, private budget planner for people who earn in one currency and live in another.**
 
-You get paid in dollars, pounds or euros, and you pay rent and buy groceries in pesos, baht, euros or something else. Most budget apps only handle one currency, so you end up doing the sums in your head. Financial Planner shows every amount in both currencies at the live exchange rate. It runs on your own Google Sheet, so your money data stays in your own Google account.
+*Built by an expat, for expats. The author has lived in Egypt, the Philippines and Malaysia, and made this app to handle the everyday problem of earning in one currency and spending in another.*
+
+You get paid in dollars, pounds or euros, and you pay rent and buy groceries in pesos, baht, euros or something else. Most budget apps only handle one currency, so you end up doing the sums in your head. Expat Financial Planner shows every amount in both currencies at the live exchange rate. It runs on your own Google Sheet, so your money data stays in your own Google account.
 
 It also uses **AI**: Claude can read your bank statements, sort each transaction into the right category, and write you a short plain-English check-in on how your pay cycle is going.
 
@@ -12,7 +14,9 @@ It also uses **AI**: Claude can read your bank statements, sort each transaction
 
 ## What it does
 
-- **Two currencies everywhere.** Every amount shows your home currency with your local currency beside it, for example `$120.00 (€111)`. It uses the live rate from Wise, updated every 15 minutes, or a backup rate you type in.
+- **Every payment locked to the real exchange rate.** When you live on one currency and pay bills in another, the exchange rate changes every day, and most budget apps quietly redo your old spending at today's rate. That makes the numbers shift under you, so you never know what you really spent. Expat Financial Planner fixes this. Each transaction is saved with Wise's exchange rate on the day it happened, along with the exact amount in both currencies. That rate stays with it forever. If you pay ₱25,000 rent this month at one rate and ₱25,000 next month at another, the app shows both: the same pesos, but different dollar costs. It also tells you how much the rate change cost or saved you. Your totals add up what you actually paid, not a guess. Today's rate is only used for the money you have now and for planning ahead. So you always know how much is coming in, how much is going out, and what the currency is really doing to your budget, without guesswork.
+- **Add spending in seconds.** You don't have to fill in a form field by field. Just type or say what you spent, in your own words, for example "lunch at the market 350 pesos" or "Grab ride 180". The app picks out the amount, the currency and the category, and fills in the form for you. Check it, press Save, and you're done. This makes it easy to keep your spending up to date every day, even on your phone.
+- **Two currencies everywhere.** Every amount shows your home currency with your local currency beside it, for example `$120.00 (€111)`. It uses the live rate from Wise, updated every 15 minutes, for what you have now, and the locked rate of the day for everything you've already spent.
 - **Money you have now.** Type what's in each account once (bank, Wise, local bank, e-wallet, cash). Each account can be in its own currency. After that, every expense and transfer you add is taken off automatically, so Home always shows what you have left and how much you can spend per day until your next pay day.
 - **Budgets that follow your pay day.** Your budget "month" runs from the day your income arrives, not from the 1st. Each budget can be in either currency, so rent can be set in local money and stay exact whatever the exchange rate does.
 - **Warnings before you overspend.** You get alerts at 50%, 75% and 100% of each budget, plus a warning if your day-to-day spending pace is ahead of plan.
@@ -27,7 +31,7 @@ It also uses **AI**: Claude can read your bank statements, sort each transaction
 
 ## Set it up (about 10 minutes)
 
-**Shortcut: let Claude set it up for you.** If you'd rather skip the setup, open Claude with a browser tool connected (for example Claude in Chrome), give it the link to this page, and say: *"Deploy this Financial Planner for me with my details."* Then tell it what it needs: your home and local currencies, your pay day, your income, your accounts and your budgets. Claude can do the steps below for you. You'll still sign in to Google yourself, and you'll paste your own Claude API key yourself.
+**Shortcut: let Claude set it up for you.** If you'd rather skip the setup, open Claude with a browser tool connected (for example Claude in Chrome), give it the link to this page, and say: *"Deploy this Expat Financial Planner for me with my details."* Then tell it what it needs: your home and local currencies, your pay day, your income, your accounts and your budgets. Claude can do the steps below for you. You'll still sign in to Google yourself, and you'll paste your own Claude API key yourself.
 
 You need a Google account. A Claude API key is optional, and you only need one for the AI features.
 
@@ -56,7 +60,7 @@ The key is stored in your script's private "Script Properties". It is never put 
 
 ## About the exchange rate
 
-The live rate comes from Wise's public rate page (`wise.com/rates/live`). This is **not an official, supported API**, so Wise could change or remove it at any time. If it can't be reached, or you switch the live rate off in Settings, the app uses the backup rate you typed in. The rate is for planning only. The rate your bank or card actually charges may differ.
+The live rate and the daily rates come from Wise's public rate pages (`wise.com/rates/live` and `wise.com/rates/history`). These are **not an official, supported API**, so Wise could change or remove them at any time. Daily rates go back one year. If they can't be reached, the app uses the live rate, or the backup rate you typed in Settings. The locked rate is Wise's mid-market rate for that day. The rate your bank or card actually charged may differ slightly. Each locked rate is saved in the **Rate** column of your sheet, so you can check or change it.
 
 ## Changing the code
 
