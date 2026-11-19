@@ -1,4 +1,7 @@
-# Expat Financial Planner
+<p align="center"><img src="docs/logo.svg" width="112" height="112" alt="Expat Financial Planner logo: a gold square with a rising chart line, a dollar sign above and a peso sign below"></p>
+
+<h1 align="center">Expat Financial Planner</h1>
+<p align="center"><b>Two currencies, one budget</b></p>
 
 **A free, private budget planner for people who earn in one currency and live in another.**
 
@@ -6,7 +9,7 @@
 
 You get paid in dollars, pounds or euros, and you pay rent and buy groceries in pesos, baht, euros or something else. Most budget apps only handle one currency, so you end up doing the sums in your head. Expat Financial Planner shows every amount in both currencies at the live exchange rate. It runs on your own Google Sheet, so your money data stays in your own Google account.
 
-It also uses **AI**: Claude can read your bank statements, sort each transaction into the right category, and write you a short plain-English check-in on how your pay cycle is going.
+It also uses **AI**: Claude can read your bank statements, sort each transaction into the right category, sum up your day, and answer your money questions like an accountant who knows your real numbers.
 
 ![Home screen on a computer](docs/home-desktop.png)
 
@@ -22,12 +25,27 @@ It also uses **AI**: Claude can read your bank statements, sort each transaction
 - **Warnings before you overspend.** You get alerts at 50%, 75% and 100% of each budget, plus a warning if your day-to-day spending pace is ahead of plan.
 - **Upload bank statements.** Drop in a CSV or PDF statement and the transactions are added for you. Duplicates are skipped. There is a dedicated reader for **Wise** PDF statements: it handles card holds that get released, refunds, fees and currency conversions.
 - **Claude checks your categories.** After an upload, Claude reviews each transaction and fixes the wrong ones. For example, it moves a ride-hailing trip from "Other" to "Transport", or changes money you moved between your own accounts from "spending" to a "transfer".
+- **Wallets that keep their rate.** Mark a wallet like GCash in Settings. Money you move into it keeps the exchange rate of the day you moved it, and spending from it uses up the oldest money first. So a payment from the wallet costs what that money really cost you, not whatever the rate is today.
+- **Today.** See what you spent on any day: the total in both currencies, a chart of where it went, each payment, and a short summary from Claude that you can have read out loud.
+- **Month.** A calendar of the month with the amount spent on each day in both currencies. Days well above your average are outlined in red. Tap a day to open it in Today.
+- **Ask Accountant.** Pick one of five common questions or type your own, for example "Can I afford a weekend trip this month?" Claude answers as your accountant, using your real budgets, spending, debt, bills and goals. It only answers questions about your money.
+- **Bills.** Add your regular bills with the day each one is due. A bill is marked paid when you add a matching payment, or you can mark it yourself. Bills due within 3 days, or late, show as a reminder on Home.
+- **Savings goals.** Save toward an emergency fund, a trip or anything else. Each goal shows how far along you are, what's left, and how much to put aside each month to finish on time.
+- **Monthly report.** A one-page summary of any month: money in, money spent, each category compared with the month before, your biggest payments, fees, bills and goals. Print it, save it as a PDF, or have it read out loud.
 - **AI money check-in.** One button asks Claude for a short, simple summary: how the cycle is going, what to watch, and a safe daily amount until pay day.
 - **Easy to use.** Large text, a text-size control, light and dark colours, a "read summary out loud" button and a button to hide all amounts. It works on a phone or a computer.
 
-| Phone | Add an expense | Settings |
+| History | Add an expense | Settings |
 |---|---|---|
-| ![Home on a phone](docs/home-phone.png) | ![Add screen](docs/add.png) | ![Settings](docs/settings.png) |
+| ![History, with the rate each payment used](docs/history.png) | ![Add screen](docs/add.png) | ![Settings, with the wallet rate option](docs/settings.png) |
+
+| Today | Month | Ask Accountant |
+|---|---|---|
+| ![Today page with a chart of one day's spending](docs/today.png) | ![Month calendar with spending on each day](docs/month.png) | ![Ask Accountant page with an answer](docs/ask.png) |
+
+| Bills | Savings goals | Monthly report |
+|---|---|---|
+| ![Bills page with due dates](docs/bills.png) | ![Savings goals with progress bars](docs/goals.png) | ![Monthly report](docs/report.png) |
 
 ## Set it up (about 10 minutes)
 
@@ -54,7 +72,7 @@ The key is stored in your script's private "Script Properties". It is never put 
 ## Privacy
 
 - Your transactions and settings live in **your own Google Sheet**. The app is deployed from **your own Google account**. There is no server run by anyone else, no tracking, and no ads.
-- When you use the AI features, the transactions being checked, or a summary of your pay cycle, are sent to Anthropic's Claude API using **your** key. Nothing is sent to the author of this project.
+- When you use the AI features, the transactions being checked, a summary of your pay cycle or day, or the numbers behind an Ask Accountant question, are sent to Anthropic's Claude API using **your** key. Nothing is sent to the author of this project.
 - To get the exchange rate, the script asks Wise's public rate page for the current rate. Only the two currency codes are sent.
 - With "Who has access: Only myself", only you can open the app. If you share it with a partner, they can add expenses too, and each entry records who added it.
 
