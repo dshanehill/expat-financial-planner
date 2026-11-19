@@ -34,8 +34,8 @@ function usdP(n,local){if(local==null||!twoCur())return usd(n);return usd0(n)+" 
 function php(n){return fmt(n,S.localCur)}
 function toUsd(amount,cur){return cur===S.homeCur?amount:amount/rateNow()}
 function inCur(t,cur){if(t.currency===cur)return +t.amount||0;const h=+t.usd||0;if(cur===S.homeCur)return h;return h*((t.currency===S.homeCur&&+t.rate>0)?+t.rate:rateNow())}
-function rateText(t){if(!twoCur()||!(+t.rate>0))return "";const r=+t.rate;return t.currency===S.homeCur||t.currency===S.localCur?`1 ${S.homeCur} = ${r.toFixed(r<10?4:2)} ${t.currency===S.homeCur?S.localCur:t.currency}`:`1 ${S.homeCur} = ${r} ${t.currency}`}
-async function addLocked(list){const r=await gs("addTxLocked",list);list.forEach((t,i)=>{const x=r[i]||{};t.id=x.id;if(+x.rate>0)t.rate=+x.rate;if(x.usd!=null)t.usd=+x.usd});return list}
+function rateText(t){if(!twoCur()||!(+t.rate>0))return "";const r=+t.rate;if(t.lot)return `1 ${S.homeCur} = ${r.toFixed(r<10?4:2)} ${S.localCur}, the rate when this money went into ${t.account}`;return t.currency===S.homeCur||t.currency===S.localCur?`1 ${S.homeCur} = ${r.toFixed(r<10?4:2)} ${t.currency===S.homeCur?S.localCur:t.currency}`:`1 ${S.homeCur} = ${r} ${t.currency}`}
+async function addLocked(list){const r=await gs("addTxLocked",list);list.forEach((t,i)=>{const x=r[i]||{};t.id=x.id;if(+x.rate>0)t.rate=+x.rate;if(x.usd!=null)t.usd=+x.usd;t.lot=!!x.lot});return list}
 function hid(v){return EYE?usd(v):"••••••"}
 function curs(){return [...new Set([S.localCur,S.homeCur].filter(Boolean))]}
 function curOptions(sel){return curs().map(c=>`<option${c===sel?" selected":""}>${esc(c)}</option>`).join("")}
@@ -86,8 +86,14 @@ function barHtml(spent,budget){const lv=level(spent,budget);const p=budget>0?Mat
 // ---------- views ----------
 function render(){
  const v=(location.hash||"#home").slice(1);
- app.classList.toggle("wide",v==="home");const td=$("#topdate");if(td)td.textContent=new Date().toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+ app.classList.toggle("wide",v==="home"||v==="month");const td=$("#topdate");if(td)td.textContent=new Date().toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
  document.querySelectorAll("nav a").forEach(a=>a.setAttribute("aria-current",a.dataset.v===v?"page":"false"));
+ if(v==="today")return viewToday();
+ if(v==="month")return viewMonth();
+ if(v==="bills")return viewBills();
+ if(v==="goals")return viewGoals();
+ if(v==="report")return viewReport();
+ if(v==="ask")return viewAsk();
  if(v==="add")return viewAdd();
  if(v==="history")return viewHistory();
  if(v==="import")return viewImport();
@@ -162,7 +168,7 @@ function viewHome(){
  for(const [k,n] of CATS){const sp=catSpent(st,k);const b=catBudget(k);if(!sp&&!b)continue;
   h+=`<div class="card"><div class="row"><strong>${esc(n)}</strong><span class="${level(sp,b)}">${EYE?usdP(st.byCat[k]||0,st.byCatLocal[k])+(b?" of "+usd(b):""):"••••••"}</span></div>${b||sp?barHtml(sp,b):""}</div>`}
  h+=`</div></div>`;
- app.innerHTML=h;
+ app.innerHTML=billsDueHtml()+h;
  $("#eye").onclick=()=>{EYE=!EYE;lsSet("eye",EYE?"1":"0");viewHome()};
  $("#speak").onclick=()=>speak(summaryText(st));
  $("#refresh").onclick=()=>{toast("Refreshing…");refreshRate();load()};
@@ -542,7 +548,7 @@ function viewSettings(){
  <label for="sn">Your full name as it appears on transfers (optional). Money you send to yourself is then counted as a transfer, not spending.</label><input id="sn" value="${esc(S.selfName||"")}" autocomplete="name"></div>
  <div class="card"><h2 style="margin-top:0">Income each pay cycle (home currency)</h2><div id="inclist">${inc.map((x,i)=>`<div class="grid2 incrow"><div><label for="in${i}">Source</label><input id="in${i}" class="incn" value="${esc(x.name)}" placeholder="Salary"></div><div><label for="ia${i}">Amount</label><input id="ia${i}" class="inca" inputmode="decimal" value="${x.usd||""}"></div></div>`).join("")}</div>
  <button type="button" id="addinc" style="width:100%;margin-top:10px">Add another income source</button></div>
- <div class="card"><h2 style="margin-top:0">Your accounts</h2><label for="accts">Accounts and wallets, separated by commas</label><textarea id="accts" rows="3">${esc((S.accounts||ACCOUNTS).join(", "))}</textarea><p class="muted">Use the same names your banks use (for example "Chase, Revolut, PayPal, Cash") so uploaded statements are matched automatically.</p></div>
+ <div class="card"><h2 style="margin-top:0">Your accounts</h2><label for="accts">Accounts and wallets, separated by commas</label><textarea id="accts" rows="3">${esc((S.accounts||ACCOUNTS).join(", "))}</textarea><label for="lots">Wallets that keep the exchange rate from the day you moved money in, separated by commas (optional, for example GCash). Spending from them then costs what the money cost you, not today's rate.</label><input id="lots" value="${esc((S.lotAccounts||[]).join(", "))}"><p class="muted">Use the same names your banks use (for example "Chase, Revolut, PayPal, Cash") so uploaded statements are matched automatically.</p></div>
  <div class="card"><h2 style="margin-top:0">Budgets</h2><p class="muted">Groceries are in your home currency. For the others, pick the currency you pay in, for example rent in local currency.</p>
  <label for="bg">Groceries per week</label><input id="bg" inputmode="decimal" value="${S.weeklyGrocery||""}">
  ${CATS.filter(([k])=>k!=="groceries"&&k!=="cash"&&k!=="other").map(([k,n])=>`<label for="b_${k}">${esc(n)} per pay cycle</label><div class="grid2"><input id="b_${k}" inputmode="decimal" value="${b[k]||""}"><select id="bc_${k}" aria-label="${esc(n)} currency">${curOptions((S.budgetsCur||{})[k]||S.homeCur)}</select></div>`).join("")}
@@ -574,10 +580,204 @@ function viewSettings(){
   const accounts=$("#accts").value.split(",").map(x=>x.trim()).filter(Boolean);
   if(!accounts.length){st.className="bad";st.textContent="Add at least one account, for example Cash.";$("#accts").focus();return}
   const dc=$("#dc").value;const next={...S,homeCur:hc,localCur:lc,rate:hc===lc?1:(n("#rt")||1),liveRate:$("#lr").checked,payDay:Math.max(1,Math.min(31,Math.round(n("#pd")||1))),selfName:$("#sn").value.trim(),budgetsCur:{},defaultCurrency:[hc,lc].includes(dc)?dc:lc,income,accounts,weeklyGrocery:n("#bg"),budgets:{},debtStart:n("#ds"),debtStartMonth:$("#dm").value||S.debtStartMonth};
+  next.lotAccounts=$("#lots").value.split(",").map(x=>x.trim()).filter(x=>accounts.includes(x));
   for(const [k] of CATS)if(k!=="groceries"&&k!=="cash"&&k!=="other"&&$("#b_"+k)){next.budgets[k]=n("#b_"+k);const c=$("#bc_"+k).value;next.budgetsCur[k]=[hc,lc].includes(c)?c:hc}
   st.className="";st.textContent="Saving…";
   try{S={...next,...(await gs("saveSettings",next))};ACCOUNTS=S.accounts;refreshRate();toast("Settings saved.");viewSettings();$("#sstat").textContent="Settings saved."}catch(err){st.className="bad";st.textContent="Couldn't save settings."}};
 }
+
+// ---------- Today, Month, Ask Accountant, Bills, Goals, Report ----------
+var EXTRAS={bills:[],goals:[]},EXLOADED=false,REPORT_KEY=null,TODAY_DAY=null,MONTH_KEY=null;
+(function(){try{document.head.insertAdjacentHTML("beforeend",'<style>@media print{nav,.topbar,.noprint,#toast{display:none!important}html,body{background:#fff!important}.card{background:#fff!important;border:1px solid #bbb!important;box-shadow:none!important;break-inside:avoid}*{color:#000!important}}.gbar{height:12px;border-radius:8px;background:var(--line);overflow:hidden;margin:8px 0}.gbar span{display:block;height:100%;background:var(--good)}table.rep{width:100%;border-collapse:collapse}table.rep td,table.rep th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left}table.rep .n{text-align:right}.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.cal .dh{font-size:.7em;font-weight:700;color:var(--muted);text-align:center;padding:4px 0}.cal button{min-height:74px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;font-size:.72em;line-height:1.25;border-radius:12px}.cal button b{font-size:1.15em}.cal button.hi{outline:2px solid var(--bad)}.cal button.td{border-color:var(--accent)}.cal button span{color:var(--muted)}.legend{display:grid;gap:6px;margin-top:12px}.legend .sw{display:inline-block;width:14px;height:14px;border-radius:4px;margin-right:8px;vertical-align:-2px}</style>')}catch(e){}})();
+function locOf(t){return inCur(t,S.localCur)}
+function dOf(k){return new Date(+k.slice(0,4),+k.slice(5,7)-1,+k.slice(8,10)||1)}
+function catLabel(k){return CATNAME[k]||k||"Other"}
+function niceDate(k,o){return dOf(k).toLocaleDateString("en-US",o||{weekday:"long",month:"long",day:"numeric"})}
+function mdToHtml(md){const lines=esc(md||"").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").split(/\n/);let h="",ul=false;
+ lines.forEach(l=>{const m=l.match(/^\s*[-*•]\s+(.*)/);if(m){if(!ul){h+="<ul>";ul=true}h+=`<li>${m[1]}</li>`;return}if(ul){h+="</ul>";ul=false}const hd=l.match(/^#+\s*(.*)/);if(hd)h+=`<p><b>${hd[1]}</b></p>`;else if(l.trim())h+=`<p>${l}</p>`});
+ return h+(ul?"</ul>":"")}
+const PIE_COLORS=["#e8b84a","#3ccf8e","#5aa9ff","#ff7a7a","#b48cff","#ffb547","#4dd0c8","#f48fb1","#9ccc65","#90a4ae"];
+function pieSvg(items,total,label,totalText){let off=0;const segs=items.map((x,i)=>{const p=total>0?x.v/total*100:0;const s=`<circle r="15.915" cx="21" cy="21" fill="none" stroke="${PIE_COLORS[i%PIE_COLORS.length]}" stroke-width="6" stroke-dasharray="${p} ${100-p}" stroke-dashoffset="${25-off}"/>`;off+=p;return s}).join("");
+ return `<svg viewBox="0 0 42 42" style="width:100%;max-width:260px;display:block;margin:0 auto" role="img" aria-label="${esc(label)}: ${esc(totalText)}"><circle r="15.915" cx="21" cy="21" fill="none" stroke="var(--line)" stroke-width="6"/>${segs}<text x="21" y="20" text-anchor="middle" font-size="3.2" fill="var(--muted)">${esc(label)}</text><text x="21" y="24.5" text-anchor="middle" font-size="3.4" font-weight="700" fill="var(--text)">${esc(totalText)}</text></svg>`}
+
+// Today: one day's spending, with a chart and an optional Claude summary.
+function viewToday(){scrollTo(0,0);
+ const tk=today(),d=TODAY_DAY||tk;const list=TX.filter(t=>t.date===d&&t.kind==="expense");
+ const tot=list.reduce((a,t)=>a+(+t.usd||0),0),totL=list.reduce((a,t)=>a+locOf(t),0);
+ const by={},byL={};list.forEach(t=>{by[t.category]=(by[t.category]||0)+(+t.usd||0);byL[t.category]=(byL[t.category]||0)+locOf(t)});
+ const keys=Object.keys(by).sort((a,b)=>by[b]-by[a]);const items=keys.map(k=>({k,v:by[k]}));
+ const prev=dateKey(new Date(dOf(d).getTime()-864e5)),next=dateKey(new Date(dOf(d).getTime()+864e5));
+ const sum=lsGet("todaySum:"+d);
+ app.innerHTML=`${storageNote()}<h1>${d===tk?"Today":esc(niceDate(d,{weekday:"long"}))}</h1><p class="muted" style="margin-top:0">${esc(niceDate(d))}</p>
+ <div class="grid2 noprint"><button id="tprev">‹ Day before</button><button id="tnext"${d>=tk?" disabled":""}>Next day ›</button></div>
+ <p class="noprint"><a href="#month" id="tmonth">See the whole month</a></p>
+ <div class="card hero"><div class="muted">Spent ${d===tk?"today":"this day"}</div><div class="big">${usdP(tot,totL)}</div><div class="muted">${list.length} payment${list.length===1?"":"s"}</div></div>
+ ${list.length?`<div class="card"><h2 style="margin-top:0">Where it went</h2>${pieSvg(items,tot,"Spent",usdP(tot,totL))}<div class="legend">${keys.map((k,i)=>`<div class="row"><span><span class="sw" style="background:${PIE_COLORS[i%PIE_COLORS.length]}"></span>${esc(catLabel(k))}</span><span>${usdP(by[k],byL[k])}</span></div>`).join("")}</div></div>
+ <div class="card"><h2 style="margin-top:0">Payments</h2>${list.map(t=>`<div class="row"><span>${esc(t.note||catLabel(t.category))}<br><span class="muted">${esc(catLabel(t.category))} · ${esc(t.account||"")}</span></span><span>${usdP(+t.usd||0,locOf(t))}</span></div>`).join("")}</div>
+ <div class="card"><h2 style="margin-top:0">Claude's summary</h2><div id="tsum">${sum?mdToHtml(sum):`<p class="muted">${S.hasKey?"Get a short, plain summary of this day from Claude.":"Add your Claude API key in Settings to get a summary."}</p>`}</div>
+ ${S.hasKey?`<div class="grid2 noprint"><button id="tget" class="primary">${sum?"Write it again":"Get summary"}</button><button id="tread"${sum?"":" disabled"}>Read it out loud</button></div>`:""}<p id="tst" role="status" style="font-weight:700"></p></div>`
+ :`<div class="card"><p class="muted" style="margin:0">Nothing spent on this day.</p></div>`}`;
+ $("#tprev").onclick=()=>{TODAY_DAY=prev;viewToday()};$("#tnext").onclick=()=>{if(d<tk){TODAY_DAY=next;viewToday()}};
+ $("#tmonth").onclick=()=>{MONTH_KEY=d.slice(0,7)};
+ if($("#tread"))$("#tread").onclick=()=>{try{speak($("#tsum").innerText)}catch(e){}};
+ if($("#tget"))$("#tget").onclick=async()=>{const st=$("#tst"),b=$("#tget");b.disabled=true;st.className="";st.textContent="Claude is writing your summary…";
+  const days=30,from=dateKey(new Date(dOf(d).getTime()-days*864e5));const past=TX.filter(t=>t.kind==="expense"&&t.date>=from&&t.date<d).reduce((a,t)=>a+(+t.usd||0),0);
+  const facts={day:d,homeCurrency:S.homeCur,localCurrency:S.localCur,spentHome:+tot.toFixed(2),spentLocal:Math.round(totL),averagePerDayLast30Days:+(past/days).toFixed(2),
+   byCategory:keys.map(k=>({category:catLabel(k),home:+by[k].toFixed(2),local:Math.round(byL[k]),budgetPerCycle:+catBudget(k).toFixed(2)})),
+   payments:list.slice(0,40).map(t=>({note:t.note||"",category:catLabel(t.category),amount:t.amount,currency:t.currency,home:t.usd}))};
+  try{const r=await gs("todaySummary",facts);if(r&&r.text){lsSet("todaySum:"+d,r.text);viewToday();return}st.className="bad";st.textContent=(r&&r.error)||"Claude didn't answer. Try again."}catch(e){st.className="bad";st.textContent="Couldn't reach Claude: "+(e&&e.message||"try again.")}b.disabled=false};
+}
+
+// Month: a calendar with what was spent each day. Tap a day to open it in Today.
+function viewMonth(){scrollTo(0,0);
+ const tk=today(),mk=MONTH_KEY||tk.slice(0,7),y=+mk.slice(0,4),m=+mk.slice(5,7);
+ const first=new Date(y,m-1,1),days=new Date(y,m,0).getDate(),lead=(first.getDay()+6)%7;
+ const byDay={},byDayL={};TX.forEach(t=>{if(t.kind!=="expense"||!(t.date||"").startsWith(mk))return;byDay[t.date]=(byDay[t.date]||0)+(+t.usd||0);byDayL[t.date]=(byDayL[t.date]||0)+locOf(t)});
+ const ks=Object.keys(byDay),total=ks.reduce((a,k)=>a+byDay[k],0),totalL=ks.reduce((a,k)=>a+byDayL[k],0);
+ const passed=mk<tk.slice(0,7)?days:mk===tk.slice(0,7)?+tk.slice(8,10):0,avg=passed?total/passed:0;
+ const top=ks.sort((a,b)=>byDay[b]-byDay[a])[0];
+ const prevK=m===1?(y-1)+"-12":y+"-"+pad(m-1),nextK=m===12?(y+1)+"-01":y+"-"+pad(m+1);
+ let cells="";for(let i=0;i<lead;i++)cells+='<div aria-hidden="true"></div>';
+ for(let dd=1;dd<=days;dd++){const k=mk+"-"+pad(dd),u=byDay[k]||0,l=byDayL[k]||0,fut=k>tk;
+  cells+=`<button data-day="${k}" class="${avg&&u>avg*1.5?"hi ":""}${k===tk?"td":""}"${fut?" disabled":""} aria-label="${esc(niceDate(k,{month:"long",day:"numeric"}))}: ${u?esc(usdP(u,l)):"nothing spent"}"><b>${dd}</b>${u?`<span>${esc(usd0(u))}</span>${twoCur()?`<span>${esc(fmt0(l,S.localCur))}</span>`:""}`:`<span>${fut?"":"–"}</span>`}</button>`}
+ app.innerHTML=`${storageNote()}<h1>${esc(first.toLocaleDateString("en-US",{month:"long",year:"numeric"}))}</h1>
+ <div class="grid2"><button id="mprev">‹ Month before</button><button id="mnext"${mk>=tk.slice(0,7)?" disabled":""}>Next month ›</button></div>
+ <div class="card hero"><div class="muted">Spent this month</div><div class="big">${usdP(total,totalL)}</div><div class="row"><span>Average per day</span><span>${usd(avg)}</span></div>${top?`<div class="row"><span>Biggest day</span><span>${esc(niceDate(top,{month:"short",day:"numeric"}))}: ${usdP(byDay[top],byDayL[top])}</span></div>`:""}</div>
+ <div class="card"><p class="muted" style="margin-top:0">Tap a day to see its breakdown, chart and summary. Days much higher than your average have a red outline.</p>
+ <div class="cal">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(x=>`<div class="dh" aria-hidden="true">${x}</div>`).join("")}${cells}</div></div>`;
+ $("#mprev").onclick=()=>{MONTH_KEY=prevK;viewMonth()};$("#mnext").onclick=()=>{if(mk<tk.slice(0,7)){MONTH_KEY=nextK;viewMonth()}};
+ app.querySelectorAll("[data-day]").forEach(b=>b.onclick=()=>{TODAY_DAY=b.dataset.day;location.hash="#today"});
+}
+
+// Ask Accountant: questions about your money, answered by Claude with your real numbers.
+const ASK_IDEAS=["Am I on track to make it to my next pay day?","Where can I cut back this month without hurting my basics?","How fast can I pay off my debt?","Are any of my fees or subscriptions a waste of money?","How much should I keep as an emergency fund, and how do I build it?"];
+function askHist(){try{return JSON.parse(lsGet("askHist")||"[]")}catch(e){return []}}
+function askData(){const st=stats(),c=cycle(),b=balanceNow();const from=dateKey(new Date(Date.now()-60*864e5));
+ return {today:today(),homeCurrency:S.homeCur,localCurrency:S.localCur,rateNow:rateNow(),payCycle:cycleLabel(c),daysLeftInCycle:Math.max(0,Math.round((c.e-dOf(today()))/864e5)+1),
+  incomePerCycle:(S.income||[]).map(x=>({name:x.name,home:x.usd})),moneyNow:b.date?b.items.map(x=>({account:x.name,amount:x.amount,currency:x.currency})):"not entered",
+  spentThisCycle:+st.spent.toFixed(2),byCategoryThisCycle:CATS.map(([k,n])=>({category:n,spent:+(st.byCat[k]||0).toFixed(2),budget:+catBudget(k).toFixed(2)})).filter(x=>x.spent||x.budget),
+  debt:S.debtStart?{startTotal:S.debtStart,paidSoFar:+st.debtPaid.toFixed(2)}:"none entered",
+  bills:EXTRAS.bills.map(x=>({name:x.name,amount:x.amount,currency:x.currency,dueDay:x.day})),goals:EXTRAS.goals.map(x=>({name:x.name,target:x.target,saved:x.saved,by:x.by})),
+  recentSpending:TX.filter(t=>t.kind==="expense"&&t.date>=from).slice(-150).map(t=>[t.date,catLabel(t.category),t.note||"",t.amount,t.currency,t.usd])}}
+function viewAsk(){scrollTo(0,0);const hist=askHist();
+ app.innerHTML=`${storageNote()}<h1>Ask Accountant</h1><p class="muted" style="margin-top:0">Ask Claude, as your accountant, any question about your money. It sees your real numbers: this pay cycle, your budgets, debt, bills, goals and recent spending. It only answers money questions.</p>
+ ${S.hasKey?"":`<div class="alert w">Add your Claude API key in Settings to use this page.</div>`}
+ <div class="card"><h2 style="margin-top:0">Pick a question</h2>${ASK_IDEAS.map((q,i)=>`<button class="askq" data-q="${i}" style="width:100%;margin:6px 0;text-align:left">${esc(q)}</button>`).join("")}</div>
+ <div class="card"><h2 style="margin-top:0">Or ask your own</h2><label for="askin">Your question</label><textarea id="askin" rows="3" placeholder="For example: Can I afford a weekend trip this month?"></textarea>
+ <button id="askgo" class="primary" style="width:100%;margin-top:10px">Ask the accountant</button><p id="askst" role="status" style="font-weight:700"></p></div>
+ <div id="askans">${hist.map(h=>`<div class="card"><div class="muted">${esc(h.date)}</div><h2 style="margin-top:6px;text-transform:none;letter-spacing:0">${esc(h.q)}</h2>${mdToHtml(h.a)}<button class="askread noprint" style="margin-top:8px">Read it out loud</button></div>`).join("")}</div>
+ ${hist.length?'<button id="askclear" style="width:100%">Clear these answers</button>':""}`;
+ const ask=async q=>{q=String(q||"").trim();const st=$("#askst");if(!q){st.className="bad";st.textContent="Type a question first.";return}
+  if(!S.hasKey){st.className="bad";st.textContent="Add your Claude API key in Settings first.";return}
+  st.className="";st.textContent="The accountant is thinking. This can take up to a minute…";app.querySelectorAll("button").forEach(b=>b.disabled=true);
+  if(!EXLOADED)try{await loadExtras()}catch(e){}
+  const prev=askHist().slice(0,3).map(h=>({q:h.q,a:String(h.a).slice(0,1500)}));
+  try{const r=await gs("askAccountant",q,askData(),prev);if(r&&r.text){const h=askHist();h.unshift({q,a:r.text,date:new Date().toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})});lsSet("askHist",JSON.stringify(h.slice(0,10)));viewAsk();return}
+   st.className="bad";st.textContent=(r&&r.error)||"The accountant didn't answer. Try again."}catch(e){st.className="bad";st.textContent="Couldn't reach the accountant: "+(e&&e.message||"try again.")}
+  app.querySelectorAll("button").forEach(b=>b.disabled=false)};
+ app.querySelectorAll(".askq").forEach(b=>b.onclick=()=>ask(ASK_IDEAS[+b.dataset.q]));
+ $("#askgo").onclick=()=>ask($("#askin").value);
+ app.querySelectorAll(".askread").forEach(b=>b.onclick=()=>{try{speak(b.parentNode.innerText.replace(/Read it out loud$/,""))}catch(e){}});
+ if($("#askclear"))$("#askclear").onclick=e=>{const b=e.target;if(b.dataset.sure!=="1"){b.dataset.sure="1";b.textContent="Tap again to clear";return}lsSet("askHist","[]");viewAsk()};
+}
+
+// Bills and savings goals are saved in the script's properties (see getExtras in Code.gs).
+function loadExtras(){return gs("getExtras").then(x=>{x=x||{};EXTRAS={bills:Array.isArray(x.bills)?x.bills:[],goals:Array.isArray(x.goals)?x.goals:[]};EXLOADED=true;return EXTRAS})}
+function storeExtras(){return gs("saveExtras",EXTRAS).then(x=>{EXTRAS={bills:x.bills||[],goals:x.goals||[]};return EXTRAS})}
+function xid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function billUsd(b){return toUsd(+b.amount||0,b.currency||S.homeCur)}
+function billLoc(b){return (b.currency||S.homeCur)===S.localCur?(+b.amount||0):billUsd(b)*rateNow()}
+function billAmt(b){return usdP(billUsd(b),billLoc(b))}
+function billPaid(b,mk){
+ if((b.paid||{})[mk])return true;
+ const nm=String(b.name||"").toLowerCase().trim(),amt=+b.amount||0;
+ return TX.some(t=>{if(t.kind!=="expense"||!(t.date||"").startsWith(mk))return false;
+  if(nm.length>=3&&String(t.note||"").toLowerCase().includes(nm))return true;
+  if(b.category&&t.category===b.category&&amt>0){const ta=inCur(t,b.currency||S.homeCur);return Math.abs(ta-amt)<=amt*0.15}return false})}
+function billDue(b){
+ const tk=today(),mk=tk.slice(0,7),y=+mk.slice(0,4),m=+mk.slice(5,7),day=Math.max(1,Math.min(31,+b.day||1)),dim=(yy,mm)=>new Date(yy,mm,0).getDate();
+ const paid=billPaid(b,mk);const due=paid?new Date(y,m,Math.min(day,dim(y,m+1))):new Date(y,m-1,Math.min(day,dim(y,m)));
+ return {due,left:Math.round((due-dOf(tk))/864e5),paid,mk}}
+function dueWords(d){return d.left<0?`overdue by ${-d.left} day${d.left===-1?"":"s"}`:d.left===0?"due today":`due in ${d.left} day${d.left===1?"":"s"}`}
+function billsDueHtml(){
+ if(!EXLOADED||!EXTRAS.bills.length)return "";
+ const soon=EXTRAS.bills.map(b=>({b,d:billDue(b)})).filter(x=>!x.d.paid&&x.d.left<=3);if(!soon.length)return "";
+ return `<div class="alert w"><b>Bills due soon:</b> ${soon.map(x=>`${esc(x.b.name)}, ${billAmt(x.b)}, ${dueWords(x.d)}`).join("; ")}. <a href="#bills">See your bills</a></div>`}
+function exWait(name,fn){app.innerHTML=`${storageNote()}<h1>${name}</h1><p class="muted">Loading…</p>`;loadExtras().then(fn).catch(()=>{app.innerHTML=`<h1>${name}</h1><div class="alert">Couldn't load this page. Check your internet and try again.</div>`})}
+async function exBusy(btn,fn){btn.disabled=true;try{await fn()}catch(e){toast("Couldn't save. Check your internet and try again.");btn.disabled=false}}
+function viewBills(){scrollTo(0,0);
+ if(!EXLOADED)return exWait("Bills",()=>{if((location.hash||"").slice(1)==="bills")viewBills()});
+ const list=EXTRAS.bills.map(b=>({b,d:billDue(b)})).sort((a,c)=>(a.d.paid-c.d.paid)||(a.d.left-c.d.left));
+ const unpaid=list.filter(x=>!x.d.paid),tU=unpaid.reduce((a,x)=>a+billUsd(x.b),0),tL=unpaid.reduce((a,x)=>a+billLoc(x.b),0);
+ const dd=x=>x.d.due.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+ const st=x=>x.d.paid?`<span class="ok" style="font-weight:700">Paid this month</span>. Next due ${dd(x)}.`:x.d.left<0?`<span class="bad" style="font-weight:700">Overdue by ${-x.d.left} day${x.d.left===-1?"":"s"}</span>`:x.d.left<=3?`<span class="warn" style="font-weight:700">Due ${dd(x)}, ${dueWords(x.d)}</span>`:`Due ${dd(x)}, ${dueWords(x.d)}`;
+ const manual=x=>!!(x.b.paid||{})[x.d.mk];
+ app.innerHTML=`${storageNote()}<h1>Bills</h1><p class="muted" style="margin-top:0">Your regular bills and when they're due. A bill counts as paid when you add a payment with its name in the note (or the same category and about the same amount), or when you mark it paid. Bills due in 3 days or less also show on Home.</p>
+ ${list.length?`<div class="card hero"><div class="muted">Still to pay this month</div><div class="big">${usdP(tU,tL)}</div><div class="muted">${unpaid.length} of ${list.length} bill${list.length===1?"":"s"} not paid yet</div></div>`:""}
+ ${list.map(x=>`<div class="card"><div class="row"><b style="font-size:1.1em">${esc(x.b.name)}</b><b>${billAmt(x.b)}</b></div><div style="margin:6px 0">${st(x)}</div><div class="muted">Due on day ${+x.b.day||1} of each month${x.b.category?". Category: "+esc(catLabel(x.b.category)):""}</div><div class="grid2" style="margin-top:10px"><button data-bpay="${esc(x.b.id)}"${x.d.paid&&!manual(x)?" disabled":""}>${manual(x)?"Undo paid":x.d.paid?"Paid":"Mark paid"}</button><button data-bdel="${esc(x.b.id)}">Remove</button></div></div>`).join("")||'<div class="card"><p class="muted" style="margin:0">No bills yet. Add your first one below.</p></div>'}
+ <div class="card"><h2 style="margin-top:0">Add a bill</h2>
+ <label for="bname">Name</label><input id="bname" placeholder="For example: Rent, internet, Netflix">
+ <div class="grid2"><div><label for="bamt">Amount</label><input id="bamt" inputmode="decimal" placeholder="0.00"></div><div><label for="bcur">Currency</label><select id="bcur">${curOptions(S.localCur)}</select></div></div>
+ <div class="grid2"><div><label for="bday">Due on day of the month</label><input id="bday" inputmode="numeric" placeholder="1 to 31"></div><div><label for="bcat">Category</label><select id="bcat"><option value="">None</option>${CATS.map(([k,n])=>`<option value="${k}">${esc(n)}</option>`).join("")}</select></div></div>
+ <button id="badd" class="primary" style="width:100%;margin-top:12px">Add bill</button><p id="bst" role="status" style="font-weight:700"></p></div>`;
+ app.querySelectorAll("[data-bpay]").forEach(btn=>{btn.onclick=()=>exBusy(btn,async()=>{const b=EXTRAS.bills.find(z=>z.id===btn.dataset.bpay),mk=today().slice(0,7);b.paid=b.paid||{};if(b.paid[mk])delete b.paid[mk];else b.paid[mk]=true;const on=!!b.paid[mk];await storeExtras();toast(on?"Marked paid.":"Marked not paid.");viewBills()})});
+ app.querySelectorAll("[data-bdel]").forEach(btn=>{btn.onclick=()=>{if(!btn.dataset.sure){btn.dataset.sure="1";btn.textContent="Tap again to remove";return}exBusy(btn,async()=>{EXTRAS.bills=EXTRAS.bills.filter(z=>z.id!==btn.dataset.bdel);await storeExtras();toast("Bill removed.");viewBills()})}});
+ $("#badd").onclick=()=>{const s=$("#bst"),name=$("#bname").value.trim(),amount=parseFloat(String($("#bamt").value).replace(/[^0-9.]/g,"")),day=parseInt($("#bday").value,10);
+  if(!name){s.textContent="Type a name for the bill.";return}if(!(amount>0)){s.textContent="Type the amount.";return}if(!(day>=1&&day<=31)){s.textContent="Type the day it's due, from 1 to 31.";return}
+  exBusy($("#badd"),async()=>{EXTRAS.bills.push({id:xid(),name:name.slice(0,60),amount:Math.round(amount*100)/100,currency:$("#bcur").value,day,category:$("#bcat").value,paid:{}});await storeExtras();toast("Bill added.");viewBills()})};
+}
+function viewGoals(){scrollTo(0,0);
+ if(!EXLOADED)return exWait("Savings goals",()=>{if((location.hash||"").slice(1)==="goals")viewGoals()});
+ const r=rateNow(),g=EXTRAS.goals,tk=today(),L=v=>v*r;
+ const tS=g.reduce((a,x)=>a+(+x.saved||0),0),tT=g.reduce((a,x)=>a+(+x.target||0),0);
+ const card=x=>{const t=+x.target||0,s=+x.saved||0,p=t>0?Math.min(100,Math.max(0,s/t*100)):0,left=Math.max(0,t-s);let pace="";
+  if(x.by&&left>0){const months=Math.max(1,(+x.by.slice(0,4)-+tk.slice(0,4))*12+(+x.by.slice(5,7)-+tk.slice(5,7)));pace=`<div class="row"><span>To finish by ${esc(niceDate(x.by,{month:"short",year:"numeric"}))}</span><span>${usdP(left/months,L(left/months))} a month</span></div>`}
+  return `<div class="card"><div class="row"><b style="font-size:1.1em">${esc(x.name)}</b><b>${Math.round(p)}%</b></div><div class="gbar" role="progressbar" aria-label="${esc(x.name)} progress" aria-valuenow="${Math.round(p)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${p}%"></span></div>
+  <div class="row"><span>Saved</span><span>${usdP(s,L(s))}</span></div><div class="row"><span>Goal</span><span>${usdP(t,L(t))}</span></div><div class="row"><span>Still to go</span><span>${left>0?usdP(left,L(left)):"Done! Well done."}</span></div>${pace}
+  <label for="ga_${esc(x.id)}">Add money, or put a minus sign to take some out</label><div class="grid2"><input id="ga_${esc(x.id)}" inputmode="decimal" placeholder="Amount"><select id="gc_${esc(x.id)}" aria-label="Currency">${curOptions(S.localCur)}</select></div>
+  <div class="grid2" style="margin-top:10px"><button data-gadd="${esc(x.id)}" class="primary">Update saved amount</button><button data-gdel="${esc(x.id)}">Remove</button></div></div>`};
+ app.innerHTML=`${storageNote()}<h1>Savings goals</h1><p class="muted" style="margin-top:0">Set something to save for, like an emergency fund or a trip. Goals are kept in ${esc(S.homeCur)}. Money you add in ${esc(S.localCur)} is changed at today's rate.</p>
+ ${g.length?`<div class="card hero"><div class="muted">Saved toward all goals</div><div class="big">${usdP(tS,L(tS))}</div><div class="muted">of ${usdP(tT,L(tT))}</div></div>`:""}
+ ${g.map(card).join("")||'<div class="card"><p class="muted" style="margin:0">No goals yet. Add your first one below.</p></div>'}
+ <div class="card"><h2 style="margin-top:0">Add a goal</h2>
+ <label for="gname">What are you saving for?</label><input id="gname" placeholder="For example: Emergency fund">
+ <div class="grid2"><div><label for="gtgt">Goal amount</label><input id="gtgt" inputmode="decimal" placeholder="0.00"></div><div><label for="gcur">Currency</label><select id="gcur">${curOptions(S.homeCur)}</select></div></div>
+ <div class="grid2"><div><label for="gsav">Already saved (optional)</label><input id="gsav" inputmode="decimal" placeholder="0"></div><div><label for="gby">Finish by (optional)</label><input id="gby" type="month"></div></div>
+ <button id="gadd" class="primary" style="width:100%;margin-top:12px">Add goal</button><p id="gst" role="status" style="font-weight:700"></p></div>`;
+ const num=v=>parseFloat(String(v).replace(/[^0-9.\-]/g,""));
+ app.querySelectorAll("[data-gadd]").forEach(btn=>{btn.onclick=()=>{const id=btn.dataset.gadd,a=num($("#ga_"+id).value);if(!a){toast("Type an amount first.");return}const inHome=toUsd(a,$("#gc_"+id).value);
+  exBusy(btn,async()=>{const x=EXTRAS.goals.find(z=>z.id===id);x.saved=Math.max(0,Math.round(((+x.saved||0)+inHome)*100)/100);await storeExtras();toast(a>0?"Added to your goal.":"Taken out of your goal.");viewGoals()})}});
+ app.querySelectorAll("[data-gdel]").forEach(btn=>{btn.onclick=()=>{if(!btn.dataset.sure){btn.dataset.sure="1";btn.textContent="Tap again to remove";return}exBusy(btn,async()=>{EXTRAS.goals=EXTRAS.goals.filter(z=>z.id!==btn.dataset.gdel);await storeExtras();toast("Goal removed.");viewGoals()})}});
+ $("#gadd").onclick=()=>{const s=$("#gst"),name=$("#gname").value.trim(),c=$("#gcur").value,by=$("#gby").value;const t=toUsd(num($("#gtgt").value),c),sv=toUsd(num($("#gsav").value)||0,c);
+  if(!name){s.textContent="Type what you're saving for.";return}if(!(t>0)){s.textContent="Type the goal amount.";return}
+  exBusy($("#gadd"),async()=>{EXTRAS.goals.push({id:xid(),name:name.slice(0,60),target:Math.round(t*100)/100,saved:Math.max(0,Math.round(sv*100)/100),by:by?by+"-01":""});await storeExtras();toast("Goal added.");viewGoals()})};
+}
+function viewReport(){scrollTo(0,0);
+ const tk=today(),cur=tk.slice(0,7),mk=REPORT_KEY||cur,y=+mk.slice(0,4),m=+mk.slice(5,7);
+ const prevK=m===1?(y-1)+"-12":y+"-"+pad(m-1),nextK=m===12?(y+1)+"-01":y+"-"+pad(m+1);
+ const sum=k=>{const o={sp:0,spL:0,inc:0,incL:0,cat:{},catL:{},list:[]};TX.forEach(t=>{if(!(t.date||"").startsWith(k))return;if(t.kind==="expense"){const u=+t.usd||0,l=locOf(t);o.sp+=u;o.spL+=l;o.cat[t.category]=(o.cat[t.category]||0)+u;o.catL[t.category]=(o.catL[t.category]||0)+l;o.list.push(t)}else if(t.kind==="income"){o.inc+=+t.usd||0;o.incL+=locOf(t)}});return o};
+ const a=sum(mk),b=sum(prevK),r=rateNow();
+ const title=niceDate(mk+"-01",{month:"long",year:"numeric"}),prevName=niceDate(prevK+"-01",{month:"long"});
+ const cats=Object.keys(a.cat).sort((p,q)=>a.cat[q]-a.cat[p]),left=a.inc-a.sp,leftL=a.incL-a.spL,diff=a.sp-b.sp;
+ const cmp=b.sp>0?`You spent ${usd(Math.abs(diff))} ${diff>=0?"more":"less"} than in ${prevName}.`:"";
+ const big=a.list.slice().sort((p,q)=>(+q.usd||0)-(+p.usd||0)).slice(0,5);
+ const bills=EXLOADED?EXTRAS.bills:[],goals=EXLOADED?EXTRAS.goals:[];
+ app.innerHTML=`${storageNote()}<h1>Report for ${esc(title)}</h1>
+ <div class="grid2 noprint"><button id="rprev">‹ Month before</button><button id="rnext"${mk>=cur?" disabled":""}>Next month ›</button></div>
+ <div class="grid2 noprint" style="margin:10px 0 12px"><button id="rprint" class="primary">Print or save as PDF</button><button id="rread">Read it out loud</button></div>
+ <div id="rbody"><div class="card hero"><div class="row"><span>Money in</span><b>${usdP(a.inc,a.incL)}</b></div><div class="row"><span>Money spent</span><b>${usdP(a.sp,a.spL)}</b></div><div class="row"><span>${left>=0?"Left over":"Spent more than came in"}</span><b>${usdP(Math.abs(left),Math.abs(leftL))}</b></div>${cmp?`<p style="margin-bottom:0">${esc(cmp)}</p>`:""}${mk===cur?'<p class="muted" style="margin-bottom:0">This month is not over yet.</p>':""}</div>
+ <div class="card"><h2 style="margin-top:0">Spending by category</h2>${cats.length?`<table class="rep"><thead><tr><th>Category</th><th class="n">Spent</th><th class="n">Change from ${esc(prevName)}</th></tr></thead><tbody>${cats.map(k=>{const d=a.cat[k]-(b.cat[k]||0);return `<tr><td>${esc(catLabel(k))}</td><td class="n">${usdP(a.cat[k],a.catL[k])}</td><td class="n">${d>=0?"+":"−"}${esc(usd0(Math.abs(d)))}</td></tr>`}).join("")}</tbody></table>`:'<p class="muted">No spending this month.</p>'}</div>
+ ${big.length?`<div class="card"><h2 style="margin-top:0">Biggest payments</h2><table class="rep"><tbody>${big.map(t=>`<tr><td>${esc(niceDate(t.date,{month:"short",day:"numeric"}))}</td><td>${esc(t.note||catLabel(t.category))}</td><td class="n">${usdP(+t.usd||0,locOf(t))}</td></tr>`).join("")}</tbody></table></div>`:""}
+ <div class="card"><h2 style="margin-top:0">Fees</h2><p style="margin:0">Bank, ATM and card fees: ${usdP(a.cat.fees||0,a.catL.fees||0)}.</p></div>
+ ${bills.length?`<div class="card"><h2 style="margin-top:0">Bills</h2><table class="rep"><tbody>${bills.map(x=>`<tr><td>${esc(x.name)}</td><td class="n">${billAmt(x)}</td><td class="n">${billPaid(x,mk)?"Paid":"Not paid"}</td></tr>`).join("")}</tbody></table></div>`:""}
+ ${goals.length?`<div class="card"><h2 style="margin-top:0">Savings goals today</h2><table class="rep"><tbody>${goals.map(x=>`<tr><td>${esc(x.name)}</td><td class="n">${usdP(+x.saved||0,(+x.saved||0)*r)} of ${esc(usd0(+x.target||0))}</td></tr>`).join("")}</tbody></table></div>`:""}
+ <p class="muted">Each payment uses the exchange rate from its own day. Made with Expat Financial Planner on ${esc(niceDate(tk,{month:"long",day:"numeric",year:"numeric"}))}.</p></div>`;
+ $("#rprev").onclick=()=>{REPORT_KEY=prevK;viewReport()};$("#rnext").onclick=()=>{if(mk<cur){REPORT_KEY=nextK;viewReport()}};
+ $("#rprint").onclick=()=>{try{window.print()}catch(e){toast("Printing isn't available here. Open the app in a web browser to print.")}};
+ $("#rread").onclick=()=>{try{speak($("#rbody").innerText)}catch(e){}};
+ if(!EXLOADED)loadExtras().then(()=>{if((location.hash||"").slice(1)==="report")viewReport()}).catch(()=>{});
+}
+loadExtras().then(()=>{const v=(location.hash||"#home").slice(1);if(["home","bills","goals","report"].includes(v))render()}).catch(()=>{});
 
 // ---------- startup ----------
 window.addEventListener("hashchange",()=>render());
