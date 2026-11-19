@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#090d15">
-<title>Financial Planner</title>
+<title>Expat Financial Planner</title>
 <style>
 :root{--bg:#090d15;--bg2:#0e1420;--card:#121a28;--card2:#172133;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.15);--text:#f3f5f9;--muted:#9aa5b8;--accent:#d6b05a;--accent2:#f1d690;--ink:#1a1405;--good:#3ddc97;--warn:#f5c04e;--bad:#ff6b6b;--btn:#1a2335;--fs:20px;--r:18px;--shadow:0 1px 0 rgba(255,255,255,.04) inset,0 14px 34px -18px rgba(0,0,0,.75)}
 body.light{--bg:#f3f5f9;--bg2:#eceff5;--card:#ffffff;--card2:#fbfcfe;--line:rgba(15,23,42,.08);--line2:rgba(15,23,42,.16);--text:#0f172a;--muted:#566074;--accent:#a07a1c;--accent2:#d0a845;--good:#0d8a55;--warn:#9a6200;--bad:#c62828;--btn:#eef1f6;--shadow:0 1px 2px rgba(15,23,42,.06),0 10px 26px -16px rgba(15,23,42,.25)}
@@ -87,7 +87,7 @@ main.wide{max-width:1340px}
 </style>
 </head>
 <body>
-<header class="topbar"><a class="brand" href="#home" aria-label="Financial Planner home"><svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="fpg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3dc9a"/><stop offset="1" stop-color="#b8892c"/></linearGradient></defs><rect width="36" height="36" rx="11" fill="url(#fpg)"/><path d="M9.5 24.5l5.5-6.5 4.5 3.5 7-9" stroke="#1a1405" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="26.5" cy="12.5" r="2.3" fill="#1a1405"/><text x="10.5" y="15.2" font-size="9.5" font-weight="800" font-family="Arial,Helvetica,sans-serif" text-anchor="middle" fill="#1a1405">$</text><text x="25.5" y="30.5" font-size="9.5" font-weight="800" font-family="Arial,Helvetica,sans-serif" text-anchor="middle" fill="#1a1405">₱</text></svg><span><b>Financial Planner</b><small>Private wealth desk</small></span></a><span id="topdate"></span></header>
+<header class="topbar"><a class="brand" href="#home" aria-label="Expat Financial Planner home"><svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="fpg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3dc9a"/><stop offset="1" stop-color="#b8892c"/></linearGradient></defs><rect width="36" height="36" rx="11" fill="url(#fpg)"/><path d="M9.5 24.5l5.5-6.5 4.5 3.5 7-9" stroke="#1a1405" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="26.5" cy="12.5" r="2.3" fill="#1a1405"/><text x="10.5" y="15.2" font-size="9.5" font-weight="800" font-family="Arial,Helvetica,sans-serif" text-anchor="middle" fill="#1a1405">$</text><text x="25.5" y="30.5" font-size="9.5" font-weight="800" font-family="Arial,Helvetica,sans-serif" text-anchor="middle" fill="#1a1405">₱</text></svg><span><b>Expat Financial Planner</b><small>Private wealth desk</small></span></a><span id="topdate"></span></header>
 <main id="app" aria-live="polite"><p class="muted" style="margin-top:40px">Loading your planner…</p></main>
 <div id="toast" role="status"></div>
 <script>window.addEventListener("error",function(e){var d=document.getElementById("app");if(d)d.insertAdjacentHTML("afterbegin","<p style=\"color:#f87171\">Error: "+String(e.message).replace(/</g,"&lt;")+" (line "+e.lineno+")</p>")});</script>
