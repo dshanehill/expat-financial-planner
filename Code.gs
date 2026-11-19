@@ -1,7 +1,7 @@
 /**
  * @OnlyCurrentDoc
  */
-// Expat Financial Planner - Google Sheets backend and website.
+// Financial Planner - Google Sheets backend and website.
 // A budget planner for people who earn in one currency and live in another.
 // Setup: see README.md. Your budgets, income, currencies, pay day and accounts
 // are set inside the app (Settings screen). Your Claude API key is stored
@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS = {
 function doGet() {
   setup_();
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('Expat Financial Planner')
+    .setTitle('Financial Planner')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
