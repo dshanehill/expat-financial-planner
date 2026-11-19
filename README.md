@@ -27,6 +27,8 @@ It also uses **AI**: Claude can read your bank statements, sort each transaction
 
 ## Set it up (about 10 minutes)
 
+**Shortcut: let Claude set it up for you.** If you'd rather skip the setup, open Claude with a browser tool connected (for example Claude in Chrome), give it the link to this page, and say: *"Deploy this Expat Financial Planner for me with my details."* Then tell it what it needs: your home and local currencies, your pay day, your income, your accounts and your budgets. Claude can do the steps below for you. You'll still sign in to Google yourself, and you'll paste your own Claude API key yourself.
+
 You need a Google account. A Claude API key is optional, and you only need one for the AI features.
 
 1. **Make a new Google Sheet.** Go to [sheets.new](https://sheets.new) and give it a name, for example "My Expat Budget".
